@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useState, useEffect, memo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { SERVICES } from "@/lib/constants";
 import Link from "next/link";
 import Image from "next/image";
-import { Scissors, Sparkles, Wand2, Star, ArrowUpRight, ChevronRight } from "lucide-react";
+import { Scissors, Sparkles, Wand2, Star, ArrowUpRight } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 const CATEGORIES = ["All", "Hair", "Nails", "Skin", "Grooming"];
@@ -19,8 +19,19 @@ const getCategoryIcon = (cat: string) => {
   }
 };
 
+interface Service {
+  id: string;
+  name: string;
+  slug: string;
+  category: string;
+  description: string;
+  price_start: number;
+  image_url: string | null;
+  is_active: boolean;
+}
+
 /* ─── Card ───────────────────────────────────────────────────────────────── */
-const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; index: number }) => {
+const ServiceCard = memo(({ service, index }: { service: Service; index: number }) => {
   const Icon = getCategoryIcon(service.category);
   const prefersReduced = useReducedMotion();
 
@@ -42,12 +53,13 @@ const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; ind
       {/* image */}
       <div className="relative w-full aspect-[4/3] overflow-hidden">
         <Image
-          src={service.image || "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800"}
-          alt={`${service.title} at Habibs Hair & Beauty New Town Kolkata`}
+          src={service.image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800"}
+          alt={`${service.name} at Habibs Hair & Beauty New Town Kolkata`}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           className="object-cover transition-transform duration-700 group-hover:scale-105 will-change-transform"
           loading={index < 3 ? "eager" : "lazy"}
+          unoptimized={!!service.image_url?.includes("supabase")}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#080604]/70 via-transparent to-transparent" />
 
@@ -75,7 +87,7 @@ const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; ind
               color: "#080604",
             }}
           >
-            {service.price}
+            {service.price_start ? `From ₹${service.price_start}` : ""}
           </span>
         </div>
       </div>
@@ -83,7 +95,7 @@ const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; ind
       {/* body */}
       <div className="flex flex-col flex-1 p-5 md:p-6">
         <h2 className="font-serif font-bold text-[#EDE0C4] text-lg md:text-xl leading-tight mb-2">
-          {service.title}
+          {service.name}
         </h2>
         <p className="text-[#EDE0C4]/45 text-xs md:text-sm font-sans leading-relaxed mb-5 flex-1 line-clamp-3">
           {service.description}
@@ -100,7 +112,7 @@ const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; ind
           className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest
                      font-semibold font-sans transition-all duration-200 group/link"
           style={{ color: "rgba(201,168,76,0.6)" }}
-          aria-label={`Book ${service.title} at Habibs Hair & Beauty New Town Kolkata`}
+          aria-label={`Book ${service.name} at Habibs Hair & Beauty New Town Kolkata`}
         >
           Book Appointment
           <ArrowUpRight
@@ -122,14 +134,40 @@ const ServiceCard = memo(({ service, index }: { service: typeof SERVICES[0]; ind
 });
 ServiceCard.displayName = "ServiceCard";
 
+const ServiceCardSkeleton = () => (
+  <div className="rounded-2xl overflow-hidden animate-pulse"
+    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(201,168,76,0.08)" }}>
+    <div className="aspect-[4/3] bg-white/5" />
+    <div className="p-5 space-y-3">
+      <div className="h-4 rounded bg-white/5 w-3/4" />
+      <div className="h-3 rounded bg-white/5 w-full" />
+      <div className="h-3 rounded bg-white/5 w-2/3" />
+    </div>
+  </div>
+);
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 const ServicesContent = () => {
   const [active, setActive] = useState("All");
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
   const prefersReduced = useReducedMotion();
 
+  useEffect(() => {
+    supabase
+      .from("services")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) setServices(data as Service[]);
+        setLoading(false);
+      });
+  }, []);
+
   const filtered = active === "All"
-    ? SERVICES
-    : SERVICES.filter((s) => s.category === active);
+    ? services
+    : services.filter((s) => s.category === active);
 
   return (
     <div className="bg-[#080604] min-h-screen">
@@ -180,7 +218,7 @@ const ServicesContent = () => {
         </motion.div>
       </div>
 
-      {/* ── Category filter — horizontal scroll on mobile ───────────── */}
+      {/* ── Category filter ───────────────────────────────────────────── */}
       <div className="px-5 sm:px-8 md:px-12 lg:px-16 mb-10">
         <motion.div
           initial={{ opacity: 0, y: prefersReduced ? 0 : 12 }}
@@ -219,24 +257,34 @@ const ServicesContent = () => {
 
       {/* ── Grid ────────────────────────────────────────────────────── */}
       <div className="px-5 sm:px-8 md:px-12 lg:px-16 pb-24">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={active}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6"
-            role="list"
-            aria-label={`${active} services`}
-          >
-            {filtered.map((service, i) => (
-              <div key={service.id} role="listitem">
-                <ServiceCard service={service} index={i} />
-              </div>
-            ))}
-          </motion.div>
-        </AnimatePresence>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+            {Array.from({ length: 6 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={active}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6"
+              role="list"
+              aria-label={`${active} services`}
+            >
+              {filtered.length === 0 ? (
+                <p className="col-span-full py-20 text-center font-sans italic text-sm" style={{ color: "rgba(237,224,196,0.3)" }}>
+                  No services found for this category.
+                </p>
+              ) : filtered.map((service, i) => (
+                <div key={service.id} role="listitem">
+                  <ServiceCard service={service} index={i} />
+                </div>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        )}
 
         {/* FAQ — local SEO */}
         <motion.section

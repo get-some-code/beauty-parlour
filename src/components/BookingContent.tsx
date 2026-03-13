@@ -2,7 +2,8 @@
 
 import { useState, useEffect, memo, Suspense } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { SALON_DETAILS, SERVICES } from "@/lib/constants";
+import { SALON_DETAILS } from "@/lib/constants";
+import { supabase } from "@/lib/supabase";
 import {
   Calendar, Clock, User, Phone, CheckCircle2, ChevronRight,
   Scissors, Sparkles, Wand2, Star, ArrowLeft, ArrowUpRight,
@@ -20,6 +21,15 @@ const getCategoryIcon = (cat: string) => {
     default:      return Star;
   }
 };
+
+/* ─── Types ──────────────────────────────────────────────────────────────── */
+interface BookingService {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price_start: number;
+}
 
 /* ─── Input helper ───────────────────────────────────────────────────────── */
 const inputStyle = (err?: string): React.CSSProperties => ({
@@ -64,10 +74,23 @@ const BookingInner = () => {
   const [errors, setErrors] = useState({ date: "", time: "", name: "", phone: "" });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  
+  const [services, setServices] = useState<BookingService[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
 
   useEffect(() => {
-    if (initialService) { setForm((p) => ({ ...p, serviceId: initialService })); setStep(2); }
+    supabase.from("services").select("*").eq("is_active", true).order("created_at")
+      .then(({ data }) => {
+        if (data) setServices(data);
+        setLoadingServices(false);
+        // Automatically jump to step 2 if URL pre - selections matches a valid service
+        if (initialService && data?.find(s => s.id === initialService)) {
+          setForm(p => ({ ...p, serviceId: initialService }));
+          setStep(2);
+        }
+      });
   }, [initialService]);
+
 
   const validate = (s: number) => {
     const e = { date: "", time: "", name: "", phone: "" };
@@ -89,12 +112,33 @@ const BookingInner = () => {
 
   const next = () => { if (validate(step)) setStep((p) => p + 1); };
   const back = () => { setErrors({ date: "", time: "", name: "", phone: "" }); setStep((p) => p - 1); };
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault(); setSubmitting(true);
-    setTimeout(() => { setSubmitting(false); setSuccess(true); }, 1800);
+  
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); 
+    setSubmitting(true);
+    
+    const { error } = await supabase.from("bookings").insert([{
+      customer_name: form.name.trim(),
+      phone: form.phone.trim(),
+      service_id: form.serviceId,
+      preferred_date: form.date,
+      preferred_time: form.time,
+      message: form.notes.trim() || null,
+      status: "pending"
+    }]);
+
+    setSubmitting(false);
+    
+    if (error) {
+      alert("There was an error submitting your booking. Please try again or call us directly.");
+      console.error(error);
+      return;
+    }
+    
+    setSuccess(true);
   };
 
-  const selectedService = SERVICES.find((s) => s.id === form.serviceId);
+  const selectedService = services.find((s) => s.id === form.serviceId);
   const times = ["11:00 AM","12:00 PM","01:00 PM","02:00 PM","03:00 PM","04:00 PM","05:00 PM","06:00 PM","07:00 PM","08:00 PM"];
 
   /* success screen */
@@ -108,11 +152,11 @@ const BookingInner = () => {
         style={{ background: "linear-gradient(135deg, #C9A84C, #A08C5B)" }}>
         <CheckCircle2 className="w-8 h-8 text-[#080604]" />
       </div>
-      <h2 className="font-serif font-bold text-[#EDE0C4] text-2xl md:text-3xl">Booking Confirmed!</h2>
+      <h2 className="font-serif font-bold text-[#EDE0C4] text-2xl md:text-3xl">Booking Received!</h2>
       <p className="text-[#EDE0C4]/50 text-sm font-sans leading-relaxed">
         Thank you, <span style={{ color: "#C9A84C" }}>{form.name}</span>.
-        Your <span style={{ color: "#C9A84C" }}>{selectedService?.title}</span> appointment
-        on <span style={{ color: "#C9A84C" }}>{form.date}</span> at <span style={{ color: "#C9A84C" }}>{form.time}</span> has been received.
+        Your request for <span style={{ color: "#C9A84C" }}>{selectedService?.name}</span>
+        on <span style={{ color: "#C9A84C" }}>{form.date}</span> at <span style={{ color: "#C9A84C" }}>{form.time}</span> is pending review.
         We'll confirm via phone shortly.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 w-full mt-4">
@@ -161,97 +205,107 @@ const BookingInner = () => {
               </div>
               <SectionDivider />
 
-              {/*
-                MOBILE: horizontal scroll snap carousel
-                DESKTOP (sm+): 2-column grid
-              */}
-              <div
-                className="sm:hidden flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory"
-                role="radiogroup"
-                aria-label="Select a service"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                <style>{`.no-scrollbar::-webkit-scrollbar{display:none}`}</style>
-                {SERVICES.map((s) => {
-                  const Icon = getCategoryIcon(s.category);
-                  const active = form.serviceId === s.id;
-                  return (
-                    <button key={s.id}
-                      onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
-                      role="radio" aria-checked={active}
-                      className="flex-shrink-0 w-[72vw] max-w-[260px] flex flex-col gap-3 p-4 rounded-xl text-left snap-start transition-all duration-200
-                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]"
-                      style={{
-                        background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
-                        border: `1px solid ${active ? "rgba(201,168,76,0.35)" : "rgba(201,168,76,0.1)"}`,
-                      }}
-                    >
-                      <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
-                        style={{ background: active ? "rgba(201,168,76,0.15)" : "rgba(201,168,76,0.07)" }}>
-                        <Icon className="w-4 h-4" style={{ color: active ? "#C9A84C" : "rgba(201,168,76,0.45)" }} aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-serif font-bold text-sm leading-tight mb-0.5"
-                          style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.6)" }}>{s.title}</p>
-                        <p className="text-[10px] font-sans leading-relaxed line-clamp-3"
-                          style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
-                        <p className="text-[10px] font-sans font-semibold mt-1.5"
-                          style={{ color: "rgba(201,168,76,0.55)" }}>{s.price}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              {loadingServices ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div key={i} className="animate-pulse h-32 rounded-2xl bg-white/5 border border-[rgba(201,168,76,0.1)]" />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {/*
+                    MOBILE: horizontal scroll snap carousel
+                    DESKTOP (sm+): 2-column grid
+                  */}
+                  <div
+                    className="sm:hidden flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory"
+                    role="radiogroup"
+                    aria-label="Select a service"
+                    style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                  >
+                    <style>{`.no-scrollbar::-webkit-scrollbar{display:none}`}</style>
+                    {services.map((s) => {
+                      const Icon = getCategoryIcon(s.category);
+                      const active = form.serviceId === s.id;
+                      return (
+                        <button key={s.id}
+                          onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
+                          role="radio" aria-checked={active}
+                          className="flex-shrink-0 w-[72vw] max-w-[260px] flex flex-col gap-3 p-4 rounded-xl text-left snap-start transition-all duration-200
+                                     focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]"
+                          style={{
+                            background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
+                            border: `1px solid ${active ? "rgba(201,168,76,0.35)" : "rgba(201,168,76,0.1)"}`,
+                          }}
+                        >
+                          <div className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
+                            style={{ background: active ? "rgba(201,168,76,0.15)" : "rgba(201,168,76,0.07)" }}>
+                            <Icon className="w-4 h-4" style={{ color: active ? "#C9A84C" : "rgba(201,168,76,0.45)" }} aria-hidden="true" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-serif font-bold text-sm leading-tight mb-0.5"
+                              style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.6)" }}>{s.name}</p>
+                            <p className="text-[10px] font-sans leading-relaxed line-clamp-3"
+                              style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
+                            <p className="text-[10px] font-sans font-semibold mt-1.5"
+                              style={{ color: "rgba(201,168,76,0.55)" }}>Starts from ₹{s.price_start}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Desktop 2-col grid */}
-              <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                role="radiogroup" aria-label="Select a service">
-                {SERVICES.map((s, idx) => {
-                  const Icon = getCategoryIcon(s.category);
-                  const active = form.serviceId === s.id;
-                  const isLastOdd = idx === SERVICES.length - 1 && SERVICES.length % 3 === 1;
-                  return (
-                    <button key={s.id}
-                      onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
-                      role="radio" aria-checked={active}
-                      className={`flex flex-col gap-4 p-5 rounded-2xl text-left transition-all duration-300
-                                 hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(201,168,76,0.1)]
-                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]
-                                 ${isLastOdd ? "sm:col-span-2 lg:col-span-3 lg:max-w-sm lg:mx-auto lg:w-full" : ""}`}
-                      style={{
-                        background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
-                        border: `1px solid ${active ? "rgba(201,168,76,0.35)" : "rgba(201,168,76,0.1)"}`,
-                      }}
-                    >
-                      {/* Icon row */}
-                      <div className="flex items-center justify-between">
-                        <div className="w-12 h-12 rounded-full flex items-center justify-center"
-                          style={{ background: active ? "rgba(201,168,76,0.18)" : "rgba(201,168,76,0.07)" }}>
-                          <Icon className="w-5 h-5" style={{ color: active ? "#C9A84C" : "rgba(201,168,76,0.45)" }} aria-hidden="true" />
-                        </div>
-                        {active && (
-                          <div className="w-2 h-2 rounded-full" style={{ background: "#C9A84C" }} aria-hidden="true" />
-                        )}
-                      </div>
-                      {/* Text */}
-                      <div className="min-w-0">
-                        <p className="font-serif font-bold text-base leading-tight mb-1.5"
-                          style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.65)" }}>{s.title}</p>
-                        <p className="text-[11px] font-sans leading-relaxed line-clamp-2 mb-3"
-                          style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
-                        <p className="text-xs font-sans font-semibold tracking-wide"
-                          style={{ color: active ? "rgba(201,168,76,0.8)" : "rgba(201,168,76,0.5)" }}>{s.price}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                  {/* Desktop 2-col grid */}
+                  <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    role="radiogroup" aria-label="Select a service">
+                    {services.map((s, idx) => {
+                      const Icon = getCategoryIcon(s.category);
+                      const active = form.serviceId === s.id;
+                      const isLastOdd = idx === services.length - 1 && services.length % 3 === 1;
+                      return (
+                        <button key={s.id}
+                          onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
+                          role="radio" aria-checked={active}
+                          className={`flex flex-col gap-4 p-5 rounded-2xl text-left transition-all duration-300
+                                     hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(201,168,76,0.1)]
+                                     focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]
+                                     ${isLastOdd ? "sm:col-span-2 lg:col-span-3 lg:max-w-sm lg:mx-auto lg:w-full" : ""}`}
+                          style={{
+                            background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
+                            border: `1px solid ${active ? "rgba(201,168,76,0.35)" : "rgba(201,168,76,0.1)"}`,
+                          }}
+                        >
+                          {/* Icon row */}
+                          <div className="flex items-center justify-between">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center"
+                              style={{ background: active ? "rgba(201,168,76,0.18)" : "rgba(201,168,76,0.07)" }}>
+                              <Icon className="w-5 h-5" style={{ color: active ? "#C9A84C" : "rgba(201,168,76,0.45)" }} aria-hidden="true" />
+                            </div>
+                            {active && (
+                              <div className="w-2 h-2 rounded-full" style={{ background: "#C9A84C" }} aria-hidden="true" />
+                            )}
+                          </div>
+                          {/* Text */}
+                          <div className="min-w-0">
+                            <p className="font-serif font-bold text-base leading-tight mb-1.5"
+                              style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.65)" }}>{s.name}</p>
+                            <p className="text-[11px] font-sans leading-relaxed line-clamp-2 mb-3"
+                              style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
+                            <p className="text-xs font-sans font-semibold tracking-wide"
+                              style={{ color: active ? "rgba(201,168,76,0.8)" : "rgba(201,168,76,0.5)" }}>Starts from ₹{s.price_start}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Scroll hint for mobile */}
-              <p className="sm:hidden text-center text-[9px] uppercase tracking-widest mt-3 font-sans"
-                style={{ color: "rgba(201,168,76,0.3)" }}>
-                Swipe to explore services →
-              </p>
+                  {/* Scroll hint for mobile */}
+                  <p className="sm:hidden text-center text-[9px] uppercase tracking-widest mt-3 font-sans"
+                    style={{ color: "rgba(201,168,76,0.3)" }}>
+                    Swipe to explore services →
+                  </p>
+                </>
+              )}
             </motion.div>
           )}
 
@@ -402,7 +456,7 @@ const BookingInner = () => {
                 style={{ background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.12)" }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {[
-                    { label: "Service",   value: selectedService?.title, sub: selectedService?.price },
+                    { label: "Service",   value: selectedService?.name, sub: `Starts from ₹${selectedService?.price_start}` },
                     { label: "Date & Time", value: `${form.date} at ${form.time}` },
                     { label: "Name",      value: form.name },
                     { label: "Phone",     value: form.phone },

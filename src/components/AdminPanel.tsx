@@ -55,7 +55,7 @@ function mapDbGallery(g: Record<string,any>): GalleryItem {
 }
 function mapDbBooking(b: Record<string,any>): Booking {
   return { id:b.id, customer:b.customer_name, phone:b.phone, email:b.email||"",
-    service:b.services?.name||"", category:(b.services?.category||"Hair") as ServiceCategory,
+    service:b.services?.name||"Deleted Service", category:(b.services?.category||"Hair") as ServiceCategory,
     date:b.preferred_date||"", time:b.preferred_time||"", status:b.status as BookingStatus,
     price:b.services?.price_start?`\u20b9${b.services.price_start}`:"", notes:b.message||"" };
 }
@@ -349,7 +349,7 @@ const BookingsPanel = ({ bookings, setBookings }: {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold truncate" style={{ color:`${C}0.87)` }}>{b.customer}</p>
-                  <p className="text-[10px] truncate" style={{ color:`${C}0.38)` }}>{b.phone}</p>
+                  <p className="text-[10px] truncate" style={{ color:`${C}0.4)` }}>{b.phone} {b.email ? `· ${b.email}` : ''}</p>
                 </div>
               </div>
               <div className="flex shrink-0">
@@ -361,7 +361,7 @@ const BookingsPanel = ({ bookings, setBookings }: {
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-xl px-3 py-2.5" style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${G}0.07)` }}>
                 <p className="text-[8px] uppercase tracking-widest mb-0.5" style={{ color:`${G}0.45)` }}>Service</p>
-                <p className="text-xs font-medium truncate" style={{ color:`${C}0.72)` }}>{b.service}</p>
+                <p className="text-xs font-medium truncate" style={{ color:`${C}0.72)` }} title={b.service}>{b.service}</p>
               </div>
               <div className="rounded-xl px-3 py-2.5" style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${G}0.07)` }}>
                 <p className="text-[8px] uppercase tracking-widest mb-0.5" style={{ color:`${G}0.45)` }}>Date & Time</p>
@@ -377,7 +377,12 @@ const BookingsPanel = ({ bookings, setBookings }: {
               </div>
               <span className="text-base font-bold font-serif" style={{ color:`${G}0.8)` }}>{b.price}</span>
             </div>
-            {b.notes && <p className="text-[10px] italic" style={{ color:`${C}0.3)` }}>📝 {b.notes}</p>}
+            {b.notes && (
+              <div className="p-2.5 rounded-lg mt-2" style={{ background: "rgba(201,168,76,0.05)" }}>
+                <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color:`${G}0.5)` }}>Client Notes / Message</p>
+                <p className="text-xs" style={{ color:`${C}0.8)` }}>{b.notes}</p>
+              </div>
+            )}
           </motion.div>
         ))}
       </div>
@@ -712,10 +717,18 @@ const GalleryPanel = ({ gallery, setGallery }: {
       </div>
       <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editItem?"Edit Image":"Add Image"}>
         <div className="space-y-3">
-          <Field label="Image URL *" error={errors.url}>
-            <input className={iCls} style={iSty(errors.url)} placeholder="https://images.unsplash.com/…" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}/>
+          <Field label="Image" error={errors.url}>
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+              <input type="file" accept="image/*" onChange={e=>setImgFile(e.target.files?.[0]||null)}
+                className="hidden" id="gallery-img-upload"/>
+              <label htmlFor="gallery-img-upload" className="flex items-center gap-2 cursor-pointer whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold shrink-0" style={{border:`1px solid rgba(201,168,76,0.2)`,color:`rgba(237,224,196,0.75)`}}>
+                <Upload className="w-4 h-4" /> Upload
+              </label>
+              <input className={iCls} style={iSty(errors.url)} placeholder="Or paste image URL" value={form.url} onChange={e=>setForm(p=>({...p,url:e.target.value}))}/>
+            </div>
+            {imgFile && <span className="text-xs mt-1 pl-1" style={{color:"rgba(201,168,76,0.8)"}}>Selected: {imgFile.name}</span>}
           </Field>
-          {form.url && (
+          {form.url && !imgFile && (
             <div className="relative aspect-video rounded-xl overflow-hidden" style={{border:`1px solid ${G}0.1)`}}>
               <Image src={form.url} alt="preview" fill className="object-cover"/>
             </div>
@@ -741,7 +754,7 @@ const GalleryPanel = ({ gallery, setGallery }: {
         </div>
       </Modal>
       <ConfirmDelete open={!!deleteId} onClose={()=>setDeleteId(null)} label="Image"
-        onConfirm={()=>{setGallery(p=>p.filter(g=>g.id!==deleteId));setDeleteId(null);}}/>
+        onConfirm={()=>deleteId&&deleteGalleryItem(deleteId)}/>
     </div>
   );
 };

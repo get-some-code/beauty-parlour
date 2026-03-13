@@ -5,27 +5,25 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { Sparkles, ZoomIn, X, ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
-const images = [
-  { id: 1, title: "Luxury Hair Styling",     category: "Hair",     src: "https://images.unsplash.com/photo-1560869713-7d0a29430863?q=80&w=2070&auto=format&fit=crop" },
-  { id: 2, title: "Artistic Nail Design",    category: "Nails",    src: "https://images.unsplash.com/photo-1604654894610-df490668f602?q=80&w=1974&auto=format&fit=crop" },
-  { id: 3, title: "Global Hair Colouring",   category: "Hair",     src: "https://images.unsplash.com/photo-1519699047748-de8e457a634e?q=80&w=2080&auto=format&fit=crop" },
-  { id: 4, title: "Premium Skin Treatment",  category: "Skin",     src: "https://images.unsplash.com/photo-1570172619274-006f1d227b61?q=80&w=2070&auto=format&fit=crop" },
-  { id: 5, title: "Elegant Gel Extensions",  category: "Nails",    src: "https://images.unsplash.com/photo-1632345031435-8727f6897d53?q=80&w=2070&auto=format&fit=crop" },
-  { id: 6, title: "Luxury Salon Interior",   category: "Ambiance", src: "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=2074&auto=format&fit=crop" },
-  { id: 7, title: "Expert Hair Care",        category: "Hair",     src: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=2087&auto=format&fit=crop" },
-  { id: 8, title: "Nail Art Perfection",     category: "Nails",    src: "https://images.unsplash.com/photo-1519014816548-bf5fe059798b?q=80&w=2070&auto=format&fit=crop" },
-  { id: 9, title: "Relaxing Spa Experience", category: "Skin",     src: "https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?q=80&w=2070&auto=format&fit=crop" },
-];
+interface GalleryItem {
+  id: string;
+  title: string;
+  category: string;
+  image_url: string;
+  display_order: number;
+  is_featured: boolean;
+}
 
 const CATEGORIES = ["All", "Hair", "Nails", "Skin", "Ambiance"];
 
 /* ─── Gallery Card ───────────────────────────────────────────────────────── */
-const GalleryCard = memo(({
-  image, index, onClick,
-}: { image: typeof images[0]; index: number; onClick: () => void }) => {
+const GalleryCard = memo((
+  { image, index, onClick }: { image: GalleryItem; index: number; onClick: () => void }
+) => {
   const prefersReduced = useReducedMotion();
   return (
     <motion.div
@@ -43,12 +41,13 @@ const GalleryCard = memo(({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
     >
       <Image
-        src={image.src}
+        src={image.image_url}
         alt={`${image.title} — Habibs Hair & Beauty New Town Kolkata`}
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
         className="object-cover transition-transform duration-700 group-hover:scale-105 will-change-transform"
         loading={index < 3 ? "eager" : "lazy"}
+        unoptimized={image.image_url?.includes("supabase")}
       />
 
       {/* always-on bottom gradient */}
@@ -98,10 +97,17 @@ const GalleryCard = memo(({
 });
 GalleryCard.displayName = "GalleryCard";
 
+/* ─── Skeleton card ─────────────────────────────────────────────────────── */
+const GalleryCardSkeleton = () => (
+  <div className="rounded-2xl aspect-[4/5] animate-pulse"
+    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(201,168,76,0.08)" }} />
+);
+
 /* ─── Lightbox ───────────────────────────────────────────────────────────── */
-const Lightbox = memo(({
-  images: imgs, index, onClose, onPrev, onNext,
-}: { images: typeof images; index: number; onClose: () => void; onPrev: () => void; onNext: () => void }) => (
+const Lightbox = memo((
+  { images: imgs, index, onClose, onPrev, onNext }:
+  { images: GalleryItem[]; index: number; onClose: () => void; onPrev: () => void; onNext: () => void }
+) => (
   <motion.div
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -161,12 +167,13 @@ const Lightbox = memo(({
           className="relative w-full h-full"
         >
           <Image
-            src={imgs[index].src}
+            src={imgs[index].image_url}
             alt={`${imgs[index].title} — Habibs Hair & Beauty New Town Kolkata`}
             fill
             quality={95}
             className="object-contain"
             priority
+            unoptimized={imgs[index].image_url?.includes("supabase")}
           />
         </motion.div>
       </AnimatePresence>
@@ -195,9 +202,24 @@ Lightbox.displayName = "Lightbox";
 const GalleryContent = () => {
   const [activeCategory, setActiveCategory] = useState("All");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [images, setImages] = useState<GalleryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const prefersReduced = useReducedMotion();
 
-  const filtered = activeCategory === "All" ? images : images.filter((i) => i.category === activeCategory);
+  useEffect(() => {
+    supabase
+      .from("gallery_items")
+      .select("*")
+      .order("display_order", { ascending: true })
+      .then(({ data }) => {
+        if (data) setImages(data as GalleryItem[]);
+        setLoading(false);
+      });
+  }, []);
+
+  const filtered = activeCategory === "All"
+    ? images
+    : images.filter((i) => i.category.toLowerCase() === activeCategory.toLowerCase());
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -249,7 +271,7 @@ const GalleryContent = () => {
           </motion.div>
         </div>
 
-        {/* ── Category filter — horizontal scroll on mobile ───────── */}
+        {/* ── Category filter ───────────────────────────────────────── */}
         <div className="px-5 sm:px-8 md:px-12 lg:px-16 mb-10">
           <div
             className="flex gap-2 overflow-x-auto pb-2
@@ -284,26 +306,32 @@ const GalleryContent = () => {
 
         {/* ── Grid ────────────────────────────────────────────────── */}
         <div className="px-5 sm:px-8 md:px-12 lg:px-16 pb-8">
-          <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-            <AnimatePresence mode="popLayout">
-              {filtered.map((img, i) => (
-                <GalleryCard
-                  key={img.id}
-                  image={img}
-                  index={i}
-                  onClick={() => setLightboxIndex(i)}
-                />
-              ))}
-            </AnimatePresence>
-            {filtered.length === 0 && (
-              <motion.p
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="col-span-full py-20 text-center text-[#EDE0C4]/30 font-sans italic text-sm"
-              >
-                No images found for this category.
-              </motion.p>
-            )}
-          </motion.div>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {Array.from({ length: 6 }).map((_, i) => <GalleryCardSkeleton key={i} />)}
+            </div>
+          ) : (
+            <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              <AnimatePresence mode="popLayout">
+                {filtered.map((img, i) => (
+                  <GalleryCard
+                    key={img.id}
+                    image={img}
+                    index={i}
+                    onClick={() => setLightboxIndex(i)}
+                  />
+                ))}
+              </AnimatePresence>
+              {filtered.length === 0 && (
+                <motion.p
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="col-span-full py-20 text-center text-[#EDE0C4]/30 font-sans italic text-sm"
+                >
+                  No images found for this category.
+                </motion.p>
+              )}
+            </motion.div>
+          )}
         </div>
 
         {/* ── CTA ─────────────────────────────────────────────────── */}
@@ -335,7 +363,7 @@ const GalleryContent = () => {
 
       {/* ── Lightbox ────────────────────────────────────────────────── */}
       <AnimatePresence>
-        {lightboxIndex !== null && (
+        {lightboxIndex !== null && filtered.length > 0 && (
           <Lightbox
             images={filtered}
             index={lightboxIndex}
