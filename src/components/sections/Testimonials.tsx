@@ -1,170 +1,153 @@
 "use client";
 
-import { memo, useRef, useEffect, useState } from "react";
+import { memo, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { Star, Quote, ArrowUpRight } from "lucide-react";
 import { SALON_DETAILS } from "@/lib/constants";
-import { supabase } from "@/lib/supabase";
+
+/* ─── Data ───────────────────────────────────────────────────────────────── */
+const testimonials = [
+  {
+    id: 1,
+    name: "Sanya Gupta",
+    text: "The best nail extension service I've ever received. The attention to detail is incredible and the staff is so professional. Highly recommended for anyone in New Town!",
+    rating: 5,
+    service: "Nail Extensions",
+    avatar:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=faces",
+  },
+  {
+    id: 2,
+    name: "Rohan Chatterjee",
+    text: "I've been a regular at Habibs for my hair coloring and cuts. Anamika and her team are true experts. The ambiance is so luxurious and relaxing.",
+    rating: 5,
+    service: "Hair Coloring",
+    avatar:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=faces",
+  },
+  {
+    id: 3,
+    name: "Priya Sharma",
+    text: "Wonderful experience with their facial and skin care treatments. My skin feels rejuvenated and glowing. Definitely the top salon in Downtown Mall.",
+    rating: 5,
+    service: "Facials & Skin Care",
+    avatar:
+      "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=faces",
+  },
+];
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
-interface Review {
-  id: string;
-  name: string;
-  rating: number;
-  review_text: string;
-  service: string | null;
-  photo_url: string | null;
-  created_at: string;
-}
-
 /* ─── Review Card ────────────────────────────────────────────────────────── */
-const TestimonialCard = memo(({ t, index }: { t: Review; index: number }) => {
-  const prefersReduced = useReducedMotion();
+const TestimonialCard = memo(
+  ({ t, index }: { t: typeof testimonials[0]; index: number }) => {
+    const prefersReduced = useReducedMotion();
 
-  return (
-    <motion.article
-      initial={{ opacity: 0, y: prefersReduced ? 0 : 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-60px" }}
-      transition={{ duration: 0.6, delay: index * 0.1, ease: EXPO }}
-      className="group relative flex-shrink-0 rounded-2xl p-6 md:p-7
-                 w-[82vw] sm:w-[58vw] md:w-auto flex flex-col gap-5"
-      style={{
-        background:
-          "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(201,168,76,0.025) 100%)",
-        border: "1px solid rgba(201,168,76,0.13)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-      }}
-    >
-      {/* Quote icon */}
-      <div
-        className="absolute -top-3.5 right-5 w-8 h-8 rounded-full flex items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #C9A84C, #A08C5B)" }}
-        aria-hidden="true"
+    return (
+      <motion.article
+        initial={{ opacity: 0, y: prefersReduced ? 0 : 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.6, delay: index * 0.1, ease: EXPO }}
+        className="group relative flex-shrink-0 rounded-2xl p-6 md:p-7
+                   w-[82vw] sm:w-[58vw] md:w-auto flex flex-col gap-5"
+        style={{
+          background:
+            "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(201,168,76,0.025) 100%)",
+          border: "1px solid rgba(201,168,76,0.13)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
       >
-        <Quote className="w-3.5 h-3.5 text-[#080604]" />
-      </div>
-
-      {/* reviewer */}
-      <div className="flex items-center gap-3">
+        {/* Quote icon */}
         <div
-          className="relative w-12 h-12 md:w-14 md:h-14 rounded-full shrink-0 p-[1.5px]"
-          style={{ background: "linear-gradient(135deg, #C9A84C, #785F37)" }}
+          className="absolute -top-3.5 right-5 w-8 h-8 rounded-full flex items-center justify-center"
+          style={{
+            background: "linear-gradient(135deg, #C9A84C, #A08C5B)",
+          }}
+          aria-hidden="true"
         >
-          <div className="w-full h-full rounded-full overflow-hidden bg-[#080604] flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #C9A84C22, #A08C5B22)" }}>
-            {t.photo_url ? (
+          <Quote className="w-3.5 h-3.5 text-[#080604]" />
+        </div>
+
+        {/* reviewer */}
+        <div className="flex items-center gap-3">
+          <div
+            className="relative w-12 h-12 md:w-14 md:h-14 rounded-full shrink-0 p-[1.5px]"
+            style={{
+              background: "linear-gradient(135deg, #C9A84C, #785F37)",
+            }}
+          >
+            <div className="w-full h-full rounded-full overflow-hidden bg-[#080604]">
               <Image
-                src={t.photo_url}
+                src={t.avatar}
                 alt={`${t.name} — verified client at Habibs Hair & Beauty`}
                 width={56}
                 height={56}
                 className="w-full h-full object-cover"
                 loading="lazy"
-                unoptimized={t.photo_url.includes("supabase")}
               />
-            ) : (
-              <span className="text-xl font-serif font-bold" style={{ color: "#C9A84C" }}>
-                {t.name.charAt(0).toUpperCase()}
-              </span>
-            )}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-serif font-bold text-[#EDE0C4] text-base truncate">
+              {t.name}
+            </h3>
+            <p
+              className="text-[9px] uppercase tracking-[0.22em] font-sans truncate"
+              style={{ color: "rgba(201,168,76,0.55)" }}
+            >
+              {t.service}
+            </p>
           </div>
         </div>
-        <div className="min-w-0">
-          <h3 className="font-serif font-bold text-[#EDE0C4] text-base truncate">
-            {t.name}
-          </h3>
-          <p
-            className="text-[9px] uppercase tracking-[0.22em] font-sans truncate"
-            style={{ color: "rgba(201,168,76,0.55)" }}
-          >
-            {t.service || "Salon Client"}
-          </p>
+
+        {/* stars */}
+        <div className="flex gap-0.5" role="img" aria-label={`${t.rating} out of 5 stars`}>
+          {[...Array(t.rating)].map((_, i) => (
+            <Star
+              key={i}
+              className="w-3.5 h-3.5 fill-[#C9A84C] text-[#C9A84C]"
+              aria-hidden="true"
+            />
+          ))}
         </div>
-      </div>
 
-      {/* stars */}
-      <div className="flex gap-0.5" role="img" aria-label={`${t.rating} out of 5 stars`}>
-        {[...Array(5)].map((_, i) => (
-          <Star
-            key={i}
-            className={`w-3.5 h-3.5 ${i < t.rating ? "fill-[#C9A84C] text-[#C9A84C]" : "fill-[#C9A84C]/20 text-[#C9A84C]/20"}`}
-            aria-hidden="true"
-          />
-        ))}
-      </div>
+        {/* divider */}
+        <div
+          className="w-full h-px"
+          style={{ background: "linear-gradient(to right, rgba(201,168,76,0.18), transparent)" }}
+          aria-hidden="true"
+        />
 
-      {/* divider */}
-      <div
-        className="w-full h-px"
-        style={{ background: "linear-gradient(to right, rgba(201,168,76,0.18), transparent)" }}
-        aria-hidden="true"
-      />
+        {/* text */}
+        <blockquote className="flex-1">
+          <p
+            className="font-sans text-sm leading-relaxed italic"
+            style={{ color: "rgba(237,224,196,0.6)" }}
+          >
+            &ldquo;{t.text}&rdquo;
+          </p>
+        </blockquote>
 
-      {/* text */}
-      <blockquote className="flex-1">
-        <p
-          className="font-sans text-sm leading-relaxed italic"
-          style={{ color: "rgba(237,224,196,0.6)" }}
-        >
-          &ldquo;{t.review_text}&rdquo;
-        </p>
-      </blockquote>
-
-      {/* hover border glow */}
-      <div
-        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100
-                   transition-opacity duration-400 pointer-events-none"
-        style={{ border: "1px solid rgba(201,168,76,0.28)" }}
-        aria-hidden="true"
-      />
-    </motion.article>
-  );
-});
-TestimonialCard.displayName = "TestimonialCard";
-
-/* ─── Skeleton card ──────────────────────────────────────────────────────── */
-const TestimonialSkeleton = () => (
-  <div className="rounded-2xl p-6 md:p-7 w-[82vw] sm:w-[58vw] md:w-auto animate-pulse"
-    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(201,168,76,0.08)" }}>
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-12 h-12 rounded-full bg-white/5" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 bg-white/5 rounded w-2/3" />
-        <div className="h-2 bg-white/5 rounded w-1/2" />
-      </div>
-    </div>
-    <div className="h-2 bg-white/5 rounded mb-4 w-3/4" />
-    <div className="space-y-2">
-      <div className="h-2 bg-white/5 rounded w-full" />
-      <div className="h-2 bg-white/5 rounded w-5/6" />
-      <div className="h-2 bg-white/5 rounded w-4/5" />
-    </div>
-  </div>
+        {/* hover border glow */}
+        <div
+          className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100
+                     transition-opacity duration-400 pointer-events-none"
+          style={{ border: "1px solid rgba(201,168,76,0.28)" }}
+          aria-hidden="true"
+        />
+      </motion.article>
+    );
+  }
 );
+TestimonialCard.displayName = "TestimonialCard";
 
 /* ─── Section ────────────────────────────────────────────────────────────── */
 const Testimonials = () => {
   const trackRef = useRef<HTMLDivElement>(null);
   const prefersReduced = useReducedMotion();
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase
-      .from("reviews")
-      .select("*")
-      .eq("status", "approved")
-      .order("created_at", { ascending: false })
-      .limit(6)
-      .then(({ data }) => {
-        if (data) setReviews(data as Review[]);
-        setLoading(false);
-      });
-  }, []);
 
   return (
     <section
@@ -260,55 +243,43 @@ const Testimonials = () => {
           </motion.div>
         </div>
 
-        {/* ── Cards ────────────────────────────────────────────────── */}
-        {loading ? (
-          <div className="flex gap-4 px-5 sm:px-8 overflow-x-auto md:grid md:grid-cols-3 md:px-12 lg:px-16 md:gap-6 md:overflow-visible">
-            {Array.from({ length: 3 }).map((_, i) => <TestimonialSkeleton key={i} />)}
-          </div>
-        ) : (
-          <div
-            ref={trackRef}
-            className="
-              flex gap-4 px-5 sm:px-8
-              overflow-x-auto scroll-smooth snap-x snap-mandatory
-              pb-4 md:pb-0
-              md:grid md:grid-cols-3
-              md:overflow-visible md:px-12 lg:px-16
-              md:gap-6
-              [-webkit-overflow-scrolling:touch]
-              [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
-            "
-            role="list"
-            aria-label="Client testimonials"
-          >
-            {reviews.length === 0 ? (
-              <p className="col-span-full py-12 text-center text-sm italic font-sans" style={{ color: "rgba(237,224,196,0.3)" }}>
-                No reviews yet.
-              </p>
-            ) : reviews.map((t, i) => (
-              <div key={t.id} className="snap-start md:snap-none" role="listitem">
-                <TestimonialCard t={t} index={i} />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* ── Horizontal scroll (mobile) / grid (desktop) ──────────── */}
+        <div
+          ref={trackRef}
+          className="
+            flex gap-4 px-5 sm:px-8
+            overflow-x-auto scroll-smooth snap-x snap-mandatory
+            pb-4 md:pb-0
+            md:grid md:grid-cols-3
+            md:overflow-visible md:px-12 lg:px-16
+            md:gap-6
+            [-webkit-overflow-scrolling:touch]
+            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          "
+          role="list"
+          aria-label="Client testimonials"
+        >
+          {testimonials.map((t, i) => (
+            <div key={t.id} className="snap-start md:snap-none" role="listitem">
+              <TestimonialCard t={t} index={i} />
+            </div>
+          ))}
+        </div>
 
         {/* scroll dots — mobile */}
-        {!loading && (
-          <div className="flex justify-center gap-1.5 mt-5 md:hidden" aria-hidden="true">
-            {reviews.slice(0, 5).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-full"
-                style={{
-                  width: i === 0 ? "1.25rem" : "0.25rem",
-                  height: "0.25rem",
-                  background: i === 0 ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.2)",
-                }}
-              />
-            ))}
-          </div>
-        )}
+        <div className="flex justify-center gap-1.5 mt-5 md:hidden" aria-hidden="true">
+          {testimonials.map((_, i) => (
+            <div
+              key={i}
+              className="rounded-full"
+              style={{
+                width: i === 0 ? "1.25rem" : "0.25rem",
+                height: "0.25rem",
+                background: i === 0 ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.2)",
+              }}
+            />
+          ))}
+        </div>
 
         {/* CTA */}
         <motion.div

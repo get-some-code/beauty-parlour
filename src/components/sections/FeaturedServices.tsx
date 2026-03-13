@@ -1,14 +1,16 @@
 "use client";
 
-import { memo, useRef, useEffect, useState } from "react";
+import { memo, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase";
+import { SERVICES } from "@/lib/constants";
 import { Scissors, Sparkles, Wand2, Star, ArrowUpRight, ChevronRight } from "lucide-react";
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 const EXPO = [0.16, 1, 0.3, 1] as const;
+
+const featured = SERVICES.slice(0, 4);
 
 const getCategoryIcon = (category: string) => {
   switch (category.toLowerCase()) {
@@ -19,17 +21,8 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-interface FeaturedService {
-  id: string;
-  name: string;
-  category: string;
-  price_start: number;
-  description: string;
-  image_url: string | null;
-}
-
 /* ─── Service Card ───────────────────────────────────────────────────────── */
-const ServiceCard = memo(({ service, index }: { service: FeaturedService; index: number }) => {
+const ServiceCard = memo(({ service, index }: { service: typeof featured[0]; index: number }) => {
   const Icon = getCategoryIcon(service.category);
   const prefersReduced = useReducedMotion();
 
@@ -40,7 +33,7 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.6, delay: index * 0.08, ease: EXPO }}
       className="group relative flex-shrink-0
-                 w-[76vw] sm:w-[54vw] md:w-auto h-full flex flex-col
+                 w-[76vw] sm:w-[54vw] md:w-auto
                  rounded-2xl overflow-hidden cursor-pointer"
       style={{
         background: "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(201,168,76,0.03) 100%)",
@@ -50,39 +43,40 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
       }}
     >
       {/* image */}
-      <div className="relative w-full aspect-[4/3] overflow-hidden shrink-0">
-        <Image
-          src={service.image_url || "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800"}
-          alt={`${service.name} at Habibs Hair & Beauty New Town Kolkata`}
-          fill
-          sizes="(max-width: 640px) 76vw, (max-width: 768px) 54vw, (max-width: 1024px) 50vw, 25vw"
-          className="object-cover transition-transform duration-700 group-hover:scale-105 will-change-transform"
-          loading={index < 2 ? "eager" : "lazy"}
-          unoptimized={!!service.image_url?.includes("supabase")}
-        />
-        {/* dark overlay on hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080604]/80 via-transparent to-transparent
-                        opacity-0 group-hover:opacity-100 transition-opacity duration-400" />
-        {/* category chip */}
-        <div className="absolute top-3 left-3">
-          <span
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full
-                       text-[9px] uppercase tracking-widest font-sans font-medium"
-            style={{
-              background: "rgba(8,6,4,0.65)",
-              backdropFilter: "blur(8px)",
-              border: "1px solid rgba(201,168,76,0.25)",
-              color: "rgba(201,168,76,0.85)",
-            }}
-          >
-            <Icon className="w-2.5 h-2.5" aria-hidden="true" />
-            {service.category}
-          </span>
+      {service.image && (
+        <div className="relative w-full aspect-[4/3] overflow-hidden">
+          <Image
+            src={service.image}
+            alt={`${service.title} at Habibs Hair & Beauty New Town Kolkata`}
+            fill
+            sizes="(max-width: 640px) 76vw, (max-width: 768px) 54vw, (max-width: 1024px) 50vw, 25vw"
+            className="object-cover transition-transform duration-700 group-hover:scale-105 will-change-transform"
+            loading={index < 2 ? "eager" : "lazy"}
+          />
+          {/* dark overlay on hover */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#080604]/80 via-transparent to-transparent
+                          opacity-0 group-hover:opacity-100 transition-opacity duration-400" />
+          {/* category chip */}
+          <div className="absolute top-3 left-3">
+            <span
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full
+                         text-[9px] uppercase tracking-widest font-sans font-medium"
+              style={{
+                background: "rgba(8,6,4,0.65)",
+                backdropFilter: "blur(8px)",
+                border: "1px solid rgba(201,168,76,0.25)",
+                color: "rgba(201,168,76,0.85)",
+              }}
+            >
+              <Icon className="w-2.5 h-2.5" aria-hidden="true" />
+              {service.category}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* body */}
-      <div className="p-5 md:p-6 flex flex-col flex-1">
+      <div className="p-5 md:p-6">
         {/* price row */}
         <div className="flex items-center justify-between mb-3">
           <span
@@ -100,7 +94,7 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
               backgroundClip: "text",
             }}
           >
-            ₹{service.price_start}
+            {service.price}
           </span>
         </div>
 
@@ -112,9 +106,9 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
         />
 
         <h3 className="font-serif font-bold text-[#EDE0C4] text-lg md:text-xl leading-tight mb-2">
-          {service.name}
+          {service.title}
         </h3>
-        <p className="text-[#EDE0C4]/45 text-xs md:text-sm font-sans leading-relaxed mb-5 flex-1 line-clamp-2">
+        <p className="text-[#EDE0C4]/45 text-xs md:text-sm font-sans leading-relaxed mb-5 line-clamp-2">
           {service.description}
         </p>
 
@@ -123,7 +117,7 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
           className="inline-flex items-center gap-1.5 text-[10px] md:text-xs uppercase
                      tracking-widest font-semibold font-sans transition-colors duration-200"
           style={{ color: "rgba(201,168,76,0.65)" }}
-          aria-label={`Book ${service.name} at Habibs Hair & Beauty`}
+          aria-label={`Book ${service.title} at Habibs Hair & Beauty`}
         >
           Book Service
           <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-200" />
@@ -142,42 +136,10 @@ const ServiceCard = memo(({ service, index }: { service: FeaturedService; index:
 });
 ServiceCard.displayName = "ServiceCard";
 
-const ServiceSkeleton = () => (
-  <div className="rounded-2xl animate-pulse flex-shrink-0 w-[76vw] sm:w-[54vw] md:w-auto overflow-hidden h-full flex flex-col"
-    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(201,168,76,0.08)" }}>
-    <div className="aspect-[4/3] bg-white/5 shrink-0" />
-    <div className="p-5 flex-1 space-y-3">
-      <div className="flex justify-between">
-        <div className="h-3 rounded bg-white/5 w-1/3" />
-        <div className="h-3 rounded bg-white/5 w-1/4" />
-      </div>
-      <div className="h-px w-full bg-white/5" />
-      <div className="h-5 rounded bg-white/5 w-3/4" />
-      <div className="h-3 rounded bg-white/5 w-full" />
-      <div className="h-3 rounded bg-white/5 w-5/6" />
-    </div>
-  </div>
-);
-
 /* ─── Section ────────────────────────────────────────────────────────────── */
 const FeaturedServices = () => {
   const trackRef = useRef<HTMLDivElement>(null);
   const prefersReduced = useReducedMotion();
-  const [services, setServices] = useState<FeaturedService[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase
-      .from("services")
-      .select("*")
-      .eq("is_active", true)
-      .limit(4)
-      .order("created_at")
-      .then(({ data }) => {
-        if (data) setServices(data);
-        setLoading(false);
-      });
-  }, []);
 
   return (
     <section
@@ -256,46 +218,38 @@ const FeaturedServices = () => {
         </div>
 
         {/* ── Horizontal scroll track (mobile) / Grid (desktop) ───── */}
-        {loading ? (
-          <div className="flex gap-4 px-5 sm:px-8 overflow-x-auto pb-4 md:pb-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:px-12 lg:px-16 md:gap-6">
-            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="snap-start md:snap-none"><ServiceSkeleton /></div>)}
-          </div>
-        ) : (
-          <div
-            ref={trackRef}
-            className="
-              flex gap-4 px-5 sm:px-8
-              overflow-x-auto scroll-smooth snap-x snap-mandatory
-              pb-4 md:pb-0
-              md:grid md:grid-cols-2 lg:grid-cols-4
-              md:overflow-visible md:px-12 lg:px-16
-              md:gap-6
-              [-webkit-overflow-scrolling:touch]
-              [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
-            "
-            role="list"
-            aria-label="Featured services"
-          >
-            {services.map((service, i) => (
-              <div key={service.id} className="snap-start md:snap-none" role="listitem">
-                <ServiceCard service={service} index={i} />
-              </div>
-            ))}
-          </div>
-        )}
+        <div
+          ref={trackRef}
+          className="
+            flex gap-4 px-5 sm:px-8
+            overflow-x-auto scroll-smooth snap-x snap-mandatory
+            pb-4 md:pb-0
+            md:grid md:grid-cols-2 lg:grid-cols-4
+            md:overflow-visible md:px-12 lg:px-16
+            md:gap-6
+            [-webkit-overflow-scrolling:touch]
+            [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+          "
+          role="list"
+          aria-label="Featured services"
+        >
+          {featured.map((service, i) => (
+            <div key={service.id} className="snap-start md:snap-none" role="listitem">
+              <ServiceCard service={service} index={i} />
+            </div>
+          ))}
+        </div>
 
         {/* scroll hint dots — mobile only */}
-        {!loading && (
-          <div className="flex justify-center gap-1.5 mt-5 md:hidden" aria-hidden="true">
-            {services.map((_, i) => (
-              <div
-                key={i}
-                className="w-1 h-1 rounded-full"
-                style={{ background: i === 0 ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.2)" }}
-              />
-            ))}
-          </div>
-        )}
+        <div className="flex justify-center gap-1.5 mt-5 md:hidden" aria-hidden="true">
+          {featured.map((_, i) => (
+            <div
+              key={i}
+              className="w-1 h-1 rounded-full"
+              style={{ background: i === 0 ? "rgba(201,168,76,0.7)" : "rgba(201,168,76,0.2)" }}
+            />
+          ))}
+        </div>
 
         {/* mobile CTA */}
         <div className="flex justify-center mt-10 px-5 md:hidden">

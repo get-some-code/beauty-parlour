@@ -5,27 +5,24 @@ import {
   useScroll,
   useTransform,
   useReducedMotion,
-  AnimatePresence
 } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useRef, memo, useEffect, useState } from "react";
+import { useRef, memo } from "react";
 import { Calendar, ChevronDown, ArrowUpRight, Star, Sparkles } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { SALON_DETAILS } from "@/lib/constants";
+
+/* ─── Data ──────────────────────────────────────────────────────────────── */
+const stats = [
+  { value: "15+", label: "Years of Excellence" },
+  { value: "5000+", label: "Happy Clients" },
+  { value: "12", label: "Expert Stylists" },
+];
+
+const services = ["Hair Styling", "Nail Art", "Keratin", "Facials", "Balayage", "Grooming"];
 
 /* ─── Easing curve ───────────────────────────────────────────────────────── */
 const EXPO = [0.16, 1, 0.3, 1] as const;
-
-interface HeroData {
-  title: string;
-  subtitle: string;
-  body: string;
-}
-
-interface Stat {
-  value: string;
-  label: string;
-}
 
 /* ─── Floating service pill ─────────────────────────────────────────────── */
 const ServicePill = memo(({ label, index }: { label: string; index: number }) => (
@@ -48,7 +45,7 @@ const ServicePill = memo(({ label, index }: { label: string; index: number }) =>
 ServicePill.displayName = "ServicePill";
 
 /* ─── Stat card ──────────────────────────────────────────────────────────── */
-const StatCard = memo(({ stat, index }: { stat: Stat; index: number }) => (
+const StatCard = memo(({ stat, index }: { stat: typeof stats[0]; index: number }) => (
   <motion.div
     initial={{ opacity: 0, y: 18 }}
     animate={{ opacity: 1, y: 0 }}
@@ -56,7 +53,7 @@ const StatCard = memo(({ stat, index }: { stat: Stat; index: number }) => (
     whileHover={{ y: -3 }}
     transition-type="spring"
     className="relative flex flex-col items-center justify-center py-5 md:py-7
-               px-2 cursor-default group h-full"
+               px-2 cursor-default group"
   >
     {/* per-cell hover glow */}
     <div
@@ -98,7 +95,7 @@ const StatCard = memo(({ stat, index }: { stat: Stat; index: number }) => (
     {/* label */}
     <span
       className="relative z-10 text-[8px] md:text-[10px] uppercase tracking-[0.26em]
-                 font-sans text-center leading-tight max-w-[90%]"
+                 font-sans text-center leading-tight"
       style={{ color: "rgba(201,168,76,0.48)" }}
     >
       {stat.label}
@@ -112,55 +109,6 @@ const Hero = () => {
   const sectionRef = useRef<HTMLElement>(null);
   const prefersReduced = useReducedMotion();
   const { scrollY } = useScroll();
-
-  const [heroData, setHeroData] = useState<HeroData | null>(null);
-  const [stats, setStats] = useState<Stat[]>([
-    { value: "15+", label: "Years of Excellence" },
-    { value: "5000+", label: "Happy Clients" },
-    { value: "4.3", label: "Google Rating" },
-  ]);
-  const [services, setServices] = useState<string[]>(["Hair Styling", "Nail Art", "Keratin", "Facials", "Balayage", "Grooming"]);
-  const [trustInfo, setTrustInfo] = useState({ rating: "4.3", reviews: "100+" });
-
-  useEffect(() => {
-    // Fetch hero text
-    supabase.from("hero_sections").select("*").limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setHeroData({
-            title: data.title || "HABIBS\nHair & Beauty",
-            subtitle: data.subtitle || "New Town · Kolkata",
-            body: data.description || "Where luxury meets artistry — New Town's most celebrated destination for hair, nails & holistic beauty."
-          });
-        }
-      });
-
-    // Fetch site stats & trust info
-    supabase.from("site_settings").select("*").limit(1).maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setStats([
-            { value: data.years_exp || "15+", label: "Years of Excellence" },
-            { value: data.happy_clients || "5000+", label: "Happy Clients" },
-            { value: data.google_rating || "4.3", label: "Google Rating" },
-          ]);
-          setTrustInfo({
-            rating: data.google_rating || "4.3",
-            reviews: data.total_reviews || "100+",
-          });
-        }
-      });
-
-    // Fetch active services (pills shouldn't just be hardcoded)
-    supabase.from("services").select("category, name").eq("is_active", true).limit(8)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          // just taking the first 6 unique active service names
-          const names = Array.from(new Set(data.map(d => d.name))).slice(0, 6);
-          if (names.length > 2) setServices(names);
-        }
-      });
-  }, []);
 
   // Parallax drift (disabled for reduced-motion users)
   const imageY = useTransform(
@@ -265,12 +213,12 @@ const Hero = () => {
             }}
           >
             <Sparkles className="w-3 h-3 text-[#C9A84C]" aria-hidden="true" />
-            <div className="flex gap-0.5" role="img" aria-label={`${trustInfo.rating} stars`}>
+            <div className="flex gap-0.5" role="img" aria-label={`${SALON_DETAILS.googleRating} stars`}>
               {[...Array(5)].map((_, i) => (
                 <Star
                   key={i}
                   className={`w-2.5 h-2.5 ${
-                    i < Math.floor(Number(trustInfo.rating) || 4)
+                    i < Math.floor(Number(SALON_DETAILS.googleRating))
                       ? "fill-[#C9A84C] text-[#C9A84C]"
                       : "fill-[#C9A84C]/28 text-[#C9A84C]/28"
                   }`}
@@ -278,7 +226,7 @@ const Hero = () => {
               ))}
             </div>
             <span className="text-[#E8D5A3]/65 text-[10px] md:text-xs font-sans tracking-wide">
-              {trustInfo.rating}&nbsp;·&nbsp;{trustInfo.reviews} Reviews
+              {SALON_DETAILS.googleRating}&nbsp;·&nbsp;{SALON_DETAILS.totalReviews} Reviews
             </span>
           </motion.div>
 
@@ -288,9 +236,9 @@ const Hero = () => {
             animate={{ opacity: 1, letterSpacing: "0.45em" }}
             transition={{ duration: 1.1, delay: 0.15 }}
             className="text-[#C9A84C]/70 text-[9px] md:text-[11px] uppercase
-                       font-sans font-medium mb-5 whitespace-pre-line"
+                       font-sans font-medium mb-5"
           >
-            {heroData?.subtitle || "New Town · Kolkata"}
+            New Town · Kolkata
           </motion.p>
 
           {/* ── Main headline ─────────────────────────────────────── */}
@@ -298,46 +246,24 @@ const Hero = () => {
             initial={{ opacity: 0, y: 38 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.05, delay: 0.25, ease: EXPO }}
-            className="font-serif text-[#EDE0C4] leading-[0.93] tracking-[-0.02em] mb-5 whitespace-pre-line"
+            className="font-serif text-[#EDE0C4] leading-[0.93] tracking-[-0.02em] mb-5"
             style={{ fontSize: "clamp(3rem, 9.5vw, 8.5rem)" }}
           >
-            {heroData?.title.includes("\n") ? (
-              <>
-                {heroData.title.split("\n")[0]}
-                <br />
-                <span
-                  className="italic font-light"
-                  style={{
-                    fontSize: "clamp(2.4rem, 8vw, 7rem)",
-                    background:
-                      "linear-gradient(140deg, #F5E8B0 0%, #C9A84C 45%, #A08C5B 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                  }}
-                >
-                  {heroData.title.split("\n")[1]}
-                </span>
-              </>
-            ) : (
-              <>
-                HABIBS
-                <br />
-                <span
-                  className="italic font-light"
-                  style={{
-                    fontSize: "clamp(2.4rem, 8vw, 7rem)",
-                    background:
-                      "linear-gradient(140deg, #F5E8B0 0%, #C9A84C 45%, #A08C5B 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                  }}
-                >
-                  Hair &amp; Beauty
-                </span>
-              </>
-            )}
+            HABIBS
+            <br />
+            <span
+              className="italic font-light"
+              style={{
+                fontSize: "clamp(2.4rem, 8vw, 7rem)",
+                background:
+                  "linear-gradient(140deg, #F5E8B0 0%, #C9A84C 45%, #A08C5B 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Hair &amp; Beauty
+            </span>
           </motion.h1>
 
           {/* Ornamental divider */}
@@ -359,9 +285,10 @@ const Hero = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.65, ease: EXPO }}
             className="text-[#EDE0C4]/55 text-sm md:text-[15px] font-sans
-                       max-w-[20rem] md:max-w-md mx-auto leading-relaxed mb-9 whitespace-pre-line"
+                       max-w-[20rem] md:max-w-md mx-auto leading-relaxed mb-9"
           >
-            {heroData?.body || "Where luxury meets artistry — New Town's most celebrated destination\nfor hair, nails & holistic beauty."}
+            Where luxury meets artistry — New Town's most celebrated destination
+            for hair, nails &amp; holistic beauty.
           </motion.p>
 
           {/* ── CTA buttons ───────────────────────────────────────── */}
@@ -445,11 +372,9 @@ const Hero = () => {
             role="list"
             aria-label="Services offered at Habibs"
           >
-            <AnimatePresence>
-              {services.map((s, i) => (
-                <ServicePill key={s} label={s} index={i} />
-              ))}
-            </AnimatePresence>
+            {services.map((s, i) => (
+              <ServicePill key={s} label={s} index={i} />
+            ))}
           </motion.div>
         </div>
 
@@ -507,7 +432,7 @@ const Hero = () => {
             />
 
             {stats.map((stat, i) => (
-              <div key={stat.label} className="relative h-full">
+              <div key={stat.label} className="relative">
                 {i > 0 && (
                   <div
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-12 md:h-16 pointer-events-none"
