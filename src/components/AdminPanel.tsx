@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useState, memo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
@@ -9,8 +9,10 @@ import {
   Settings, LogOut, Search, Plus, Pencil, Trash2,
   CheckCircle2, XCircle, Clock, X, Save, Bell,
   Star, Sparkles, Wand2, Eye, AlertCircle, ChevronRight,
-  RefreshCw, ToggleLeft, ToggleRight, Menu,
+  RefreshCw, ToggleLeft, ToggleRight, Menu, Upload,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAdmin } from "@/app/admin/layout";
 
 /* ─── tokens ─────────────────────────────────────────────────────── */
 const EXPO = [0.16, 1, 0.3, 1] as const;
@@ -40,8 +42,36 @@ interface SalonSettings {
 interface ContentSection { id: string; section: string; title: string; subtitle: string; body: string; }
 interface Testimonial { id: string; name: string; rating: number; text: string; service: string; date: string; }
 
-/* ─── seed data ──────────────────────────────────────────────────── */
-const SEED_BOOKINGS: Booking[] = [
+/* ─── DB → UI mapping helpers ───────────────────────────────────────── */
+function slugify(s: string) { return s.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,""); }
+
+function mapDbService(s: Record<string,any>): Service {
+  return { id:s.id, title:s.name, description:s.description||"", category:s.category as ServiceCategory,
+    price:s.price_start?`From \u20b9${s.price_start}`:"", duration:s.duration||"",
+    image:s.image_url||"", featured:s.is_active??true };
+}
+function mapDbGallery(g: Record<string,any>): GalleryItem {
+  return { id:g.id, url:g.image_url, alt:g.title, category:g.category, featured:g.is_featured };
+}
+function mapDbBooking(b: Record<string,any>): Booking {
+  return { id:b.id, customer:b.customer_name, phone:b.phone, email:b.email||"",
+    service:b.services?.name||"", category:(b.services?.category||"Hair") as ServiceCategory,
+    date:b.preferred_date||"", time:b.preferred_time||"", status:b.status as BookingStatus,
+    price:b.services?.price_start?`\u20b9${b.services.price_start}`:"", notes:b.message||"" };
+}
+function mapDbReview(r: Record<string,any>): Testimonial {
+  return { id:r.id, name:r.name, rating:r.rating, text:r.review_text,
+    service:r.service||"", date:r.created_at?.split("T")[0]||"" };
+}
+
+const EMPTY_SETTINGS: SalonSettings = {
+  name:"",tagline:"",phone:"",whatsapp:"",email:"",address:"",location:"",hours:"",
+  owner:"",ownerTitle:"",ownerBio:"",instagram:"",facebook:"",
+  googleRating:"4.3",totalReviews:"0",yearsExp:"15+",happyClients:"5000+",
+};
+
+/* ─── placeholder to satisfy old references (unused) ─────────────────── */
+const _SEED_BOOKINGS: Booking[] = [
   { id:"BK-001", customer:"Sanya Gupta",      phone:"+91 98765 43210", email:"sanya@email.com",  service:"Nail Extensions",     category:"Nails", date:"2025-03-18", time:"11:00 AM", status:"confirmed", price:"₹1,500", notes:"French tips" },
   { id:"BK-002", customer:"Rohan Chatterjee", phone:"+91 98765 43211", email:"rohan@email.com",  service:"Hair Colouring",      category:"Hair",  date:"2025-03-18", time:"02:00 PM", status:"pending",   price:"₹3,500", notes:"" },
   { id:"BK-003", customer:"Priya Sharma",     phone:"+91 98765 43212", email:"priya@email.com",  service:"Facials & Skin Care", category:"Skin",  date:"2025-03-19", time:"10:00 AM", status:"completed", price:"₹2,500", notes:"Sensitive skin" },
@@ -49,40 +79,7 @@ const SEED_BOOKINGS: Booking[] = [
   { id:"BK-005", customer:"Neha Roy",         phone:"+91 98765 43214", email:"neha@email.com",   service:"Keratin Treatment",   category:"Hair",  date:"2025-03-20", time:"12:00 PM", status:"confirmed", price:"₹4,500", notes:"Long hair" },
   { id:"BK-006", customer:"Debashish Pal",    phone:"+91 98765 43215", email:"deb@email.com",    service:"Nail Art",            category:"Nails", date:"2025-03-21", time:"03:00 PM", status:"pending",   price:"₹800",   notes:"" },
 ];
-const SEED_SERVICES: Service[] = [
-  { id:"SV-001", title:"Haircut & Styling",   description:"Expert cuts and styling for all hair types.",           category:"Hair",  price:"From ₹500",   duration:"45 min",  image:"https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800", featured:true },
-  { id:"SV-002", title:"Hair Colouring",      description:"Full colour, highlights, balayage and ombre.",          category:"Hair",  price:"From ₹1,500", duration:"90 min",  image:"https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800", featured:true },
-  { id:"SV-003", title:"Keratin Treatment",   description:"Professional smoothing and de-frizz treatment.",       category:"Hair",  price:"From ₹3,500", duration:"120 min", image:"https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?q=80&w=800", featured:false },
-  { id:"SV-004", title:"Nail Extensions",     description:"Acrylic and gel nail extensions with custom art.",      category:"Nails", price:"From ₹800",   duration:"60 min",  image:"https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=800", featured:true },
-  { id:"SV-005", title:"Facials & Skin Care", description:"Customised facial treatments for your skin concerns.", category:"Skin",  price:"From ₹1,200", duration:"60 min",  image:"https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=800", featured:false },
-];
-const SEED_GALLERY: GalleryItem[] = [
-  { id:"GL-001", url:"https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800", alt:"Hair styling",      category:"Hair",  featured:true },
-  { id:"GL-002", url:"https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=800", alt:"Nail extensions",category:"Nails", featured:true },
-  { id:"GL-003", url:"https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=800", alt:"Facial",         category:"Skin",  featured:false },
-  { id:"GL-004", url:"https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800", alt:"Hair colouring", category:"Hair",  featured:false },
-  { id:"GL-005", url:"https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?q=80&w=800", alt:"Salon interior", category:"Salon", featured:true },
-];
-const SEED_SETTINGS: SalonSettings = {
-  name:"Habibs Hair & Beauty", tagline:"New Town's Premier Luxury Salon",
-  phone:"+91 33 4061 5078", whatsapp:"+919876543210", email:"info@habibssalon.com",
-  address:"AA3, B114–115, Uniworld City, Downtown Retail, New Town, Kolkata 700160",
-  location:"New Town, Kolkata", hours:"11:00 AM – 8:30 PM (Mon–Sun)",
-  owner:"Anamika", ownerTitle:"Owner & Expert Stylist",
-  ownerBio:"Founded with a vision to redefine luxury beauty in New Town.",
-  instagram:"https://instagram.com/habibsnewtownkolkata", facebook:"https://facebook.com/habibssalon",
-  googleRating:"4.3", totalReviews:"115", yearsExp:"15+", happyClients:"5000+",
-};
-const SEED_CONTENT: ContentSection[] = [
-  { id:"CN-001", section:"Hero",     title:"LUXURY BEAUTY\nRedefined", subtitle:"New Town's Premier Destination", body:"Experience unparalleled beauty services at Habibs Hair & Beauty." },
-  { id:"CN-002", section:"About",    title:"A LEGACY OF Beauty",       subtitle:"Our Journey",                    body:"Founded with a vision to redefine luxury beauty in New Town." },
-  { id:"CN-003", section:"Services", title:"PREMIUM Services",          subtitle:"Our Expert Offerings",           body:"From hair styling to nail extensions — every service crafted for elegance." },
-];
-const SEED_TESTIMONIALS: Testimonial[] = [
-  { id:"TM-001", name:"Riya Das",    rating:5, text:"Absolutely stunning results! Tanvir is a genius with hair colour.", service:"Hair Colouring",   date:"2025-03-10" },
-  { id:"TM-002", name:"Sunita Bose", rating:5, text:"Best nail extensions in New Town. Results last for weeks.",          service:"Nail Extensions",  date:"2025-03-08" },
-  { id:"TM-003", name:"Arjun Mehta", rating:4, text:"Great haircut and very pleasant experience overall.",                service:"Haircut & Styling", date:"2025-03-05" },
-];
+
 
 /* ─── small reusable pieces ──────────────────────────────────────── */
 const Badge = ({ status }: { status: BookingStatus }) => {
@@ -154,9 +151,9 @@ const iSty = (err?: string): React.CSSProperties => ({
   color:`${C}0.8)`,
 });
 
-const GoldBtn = ({ children, onClick, cls="" }: { children:React.ReactNode; onClick?:()=>void; cls?:string }) => (
-  <button onClick={onClick}
-    className={`flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-wider rounded-xl transition-all duration-200 active:scale-95 hover:-translate-y-0.5 ${cls}`}
+const GoldBtn = ({ children, onClick, cls="", disabled=false }: { children:React.ReactNode; onClick?:()=>void; cls?:string; disabled?:boolean }) => (
+  <button onClick={onClick} disabled={disabled}
+    className={`flex items-center justify-center gap-2 font-bold text-xs uppercase tracking-wider rounded-xl transition-all duration-200 active:scale-95 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${cls}`}
     style={{ background:"linear-gradient(135deg,#C9A84C,#E8D5A3 50%,#C9A84C)", backgroundSize:"200% auto", color:"#080604" }}>
     {children}
   </button>
@@ -259,27 +256,54 @@ const BookingsPanel = ({ bookings, setBookings }: {
         && (filter==="all"||b.status===filter);
   });
 
-  const openAdd  = () => { setForm(empty); setEditItem(null); setErrors({}); setModalOpen(true); };
   const openEdit = (b:Booking) => { setForm({...b}); setEditItem(b); setErrors({}); setModalOpen(true); };
   const validate = () => {
     const e: Partial<Booking> = {};
     if (!form.customer.trim()) e.customer="Required";
     if (!form.phone.trim())    e.phone="Required";
-    if (!form.service.trim())  e.service="Required";
     if (!form.date)            e.date="Required";
     if (!form.time.trim())     e.time="Required";
-    if (!form.price.trim())    e.price="Required";
     setErrors(e); return Object.keys(e).length===0;
   };
-  const save = () => {
-    if (!validate()) return;
-    if (editItem) setBookings(p=>p.map(b=>b.id===editItem.id?form:b));
-    else setBookings(p=>[...p,{...form,id:`BK-${String(p.length+1).padStart(3,"0")}`}]);
-    setModalOpen(false);
+  const save = async () => {
+    if (!validate() || !editItem) return;
+    const { error } = await supabase.from("bookings").update({
+      customer_name: form.customer,
+      phone: form.phone,
+      email: form.email || null,
+      preferred_date: form.date,
+      preferred_time: form.time,
+      status: form.status,
+      message: form.notes || null
+    }).eq("id", editItem.id);
+    if (!error) {
+      setBookings(p=>p.map(b=>b.id===editItem.id?form:b));
+      setModalOpen(false);
+    }
   };
-  const cycleStatus = (id:string) => {
+  const cycleStatus = async (id:string) => {
+    const b = bookings.find(x=>x.id===id); if (!b) return;
     const c: BookingStatus[] = ["pending","confirmed","completed","cancelled"];
-    setBookings(p=>p.map(b=>b.id===id?{...b,status:c[(c.indexOf(b.status)+1)%c.length]}:b));
+    const nextSt = c[(c.indexOf(b.status)+1)%c.length];
+    
+    /* Optimistic UI update */
+    setBookings(p=>p.map(x=>x.id===id?{...x,status:nextSt}:x));
+    
+    const { error } = await supabase.from("bookings").update({ status: nextSt }).eq("id", id);
+    if (error) {
+      /* Revert if failed */
+      setBookings(p=>p.map(x=>x.id===id?{...x,status:b.status}:x));
+      alert("Failed to update status");
+    }
+  };
+  const deleteBooking = async (id: string) => {
+    const { error } = await supabase.from("bookings").delete().eq("id", id);
+    if (!error) {
+      setBookings(p=>p.filter(b=>b.id!==id));
+    } else {
+      alert("Failed to delete booking");
+    }
+    setDeleteId(null);
   };
 
   return (
@@ -293,9 +317,6 @@ const BookingsPanel = ({ bookings, setBookings }: {
               className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
               style={{ background:"rgba(255,255,255,0.04)", border:`1px solid ${G}0.15)`, color:`${C}0.75)` }}/>
           </div>
-          <GoldBtn onClick={openAdd} cls="px-4 py-2.5 shrink-0">
-            <Plus className="w-4 h-4"/><span className="hidden sm:inline">New</span>
-          </GoldBtn>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4">
           {(["all","pending","confirmed","completed","cancelled"] as const).map(s => (
@@ -407,7 +428,7 @@ const BookingsPanel = ({ bookings, setBookings }: {
         </div>
       </Modal>
       <ConfirmDelete open={!!deleteId} onClose={()=>setDeleteId(null)} label="Booking"
-        onConfirm={()=>{setBookings(p=>p.filter(b=>b.id!==deleteId));setDeleteId(null);}}/>
+        onConfirm={()=>deleteId&&deleteBooking(deleteId)}/>
     </div>
   );
 };
@@ -422,12 +443,14 @@ const ServicesPanel = ({ services, setServices }: {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem,  setEditItem]  = useState<Service|null>(null);
   const [deleteId,  setDeleteId]  = useState<string|null>(null);
+  const [imgFile,   setImgFile]   = useState<File|null>(null);
+  const [uploading, setUploading] = useState(false);
   const empty: Service = { id:"", title:"", description:"", category:"Hair", price:"", duration:"", image:"", featured:false };
   const [form, setForm]     = useState<Service>(empty);
   const [errors, setErrors] = useState<Partial<Service>>({});
 
-  const openAdd  = () => { setForm(empty); setEditItem(null); setErrors({}); setModalOpen(true); };
-  const openEdit = (s:Service) => { setForm({...s}); setEditItem(s); setErrors({}); setModalOpen(true); };
+  const openAdd  = () => { setForm(empty); setEditItem(null); setImgFile(null); setErrors({}); setModalOpen(true); };
+  const openEdit = (s:Service) => { setForm({...s}); setEditItem(s); setImgFile(null); setErrors({}); setModalOpen(true); };
   const validate = () => {
     const e: Partial<Service> = {};
     if (!form.title.trim())       e.title="Required";
@@ -436,11 +459,55 @@ const ServicesPanel = ({ services, setServices }: {
     if (!form.duration.trim())    e.duration="Required";
     setErrors(e); return Object.keys(e).length===0;
   };
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
-    if (editItem) setServices(p=>p.map(s=>s.id===editItem.id?form:s));
-    else setServices(p=>[...p,{...form,id:`SV-${String(p.length+1).padStart(3,"0")}`}]);
+    setUploading(true);
+    let imageUrl = form.image;
+    
+    if (imgFile) {
+      const ext = imgFile.name.split('.').pop();
+      const fname = `${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('service-images').upload(fname, imgFile);
+      if (!upErr) {
+        const { data: pubData } = supabase.storage.from('service-images').getPublicUrl(fname);
+        imageUrl = pubData.publicUrl;
+      }
+    }
+
+    const payload = {
+      name: form.title,
+      slug: slugify(form.title),
+      category: form.category,
+      description: form.description,
+      price_start: parseInt(form.price.replace(/[^0-9]/g, "")) || 0,
+      duration: form.duration,
+      image_url: imageUrl,
+      is_active: form.featured
+    };
+
+    if (editItem) {
+      const { error } = await supabase.from('services').update(payload).eq('id', editItem.id);
+      if (!error) setServices(p=>p.map(s=>s.id===editItem.id?{...form, image:imageUrl}:s));
+    } else {
+      const { data, error } = await supabase.from('services').insert([payload]).select().single();
+      if (!error && data) setServices(p=>[...p, mapDbService(data)]);
+    }
+    
+    setUploading(false);
     setModalOpen(false);
+  };
+  
+  const toggleActive = async (id:string, current:boolean) => {
+    /* Optimistic */
+    setServices(p=>p.map(s=>s.id===id?{...s,featured:!current}:s));
+    const { error } = await supabase.from('services').update({ is_active: !current }).eq('id', id);
+    if (error) setServices(p=>p.map(s=>s.id===id?{...s,featured:current}:s));
+  };
+  
+  const deleteService = async (id:string) => {
+    const { error } = await supabase.from('services').delete().eq('id', id);
+    if (!error) setServices(p=>p.filter(s=>s.id!==id));
+    setDeleteId(null);
   };
 
   return (
@@ -457,9 +524,17 @@ const ServicesPanel = ({ services, setServices }: {
             <div className="relative aspect-video overflow-hidden">
               {s.image
                 ? <Image src={s.image} alt={s.title} fill sizes="(max-width:640px) 100vw,50vw" className="object-cover group-hover:scale-105 transition-transform duration-500"/>
-                : <div className="w-full h-full flex items-center justify-center" style={{background:`${G}0.06)`}}><ImageIcon className="w-8 h-8" style={{color:`${G}0.3)`}}/></div>}
-              <div className="absolute inset-0" style={{background:"linear-gradient(to top,rgba(8,6,4,0.65),transparent)"}}/>
-              {s.featured && <span className="absolute top-2 left-2 text-[9px] uppercase tracking-widest px-2 py-1 rounded-full font-bold" style={{background:"#C9A84C",color:"#080604"}}>Featured</span>}
+                : <div className="absolute inset-0 flex items-center justify-center bg-white/5"><Scissors className="w-8 h-8 opacity-20"/></div>}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#080604] via-transparent to-transparent opacity-80"/>
+              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={()=>openEdit(s)} className="p-2 rounded-lg bg-white/10 backdrop-blur hover:bg-white/20 transition-colors"><Pencil className="w-4 h-4 text-white"/></button>
+                <button onClick={()=>setDeleteId(s.id)} className="p-2 rounded-lg bg-red-500/20 backdrop-blur hover:bg-red-500/40 transition-colors"><Trash2 className="w-4 h-4 text-red-200"/></button>
+              </div>
+              <button onClick={()=>toggleActive(s.id, s.featured)}
+                className="absolute top-3 left-3 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider backdrop-blur transition-colors"
+                style={s.featured?{background:"rgba(201,168,76,0.9)",color:"#080604"}:{background:"rgba(255,255,255,0.1)",color:"#fff"}}>
+                {s.featured?"Active":"Hidden"}
+              </button>
             </div>
             <div className="p-4">
               <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -470,14 +545,6 @@ const ServicesPanel = ({ services, setServices }: {
                 <span className="text-sm font-bold shrink-0" style={{color:`${G}0.8)`}}>{s.price}</span>
               </div>
               <p className="text-xs leading-relaxed mb-3 line-clamp-2" style={{color:`${C}0.38)`}}>{s.description}</p>
-              <div className="flex justify-end gap-1">
-                <button onClick={()=>setServices(p=>p.map(sv=>sv.id===s.id?{...sv,featured:!sv.featured}:sv))}
-                  className="p-2 rounded-lg hover:bg-white/5 transition-colors" style={{color:s.featured?"#C9A84C":`${C}0.3)`}}>
-                  <Star className="w-4 h-4" fill={s.featured?"#C9A84C":"none"}/>
-                </button>
-                <button onClick={()=>openEdit(s)} className="p-2 rounded-lg hover:bg-white/5 transition-colors" style={{color:`${C}0.4)`}}><Pencil className="w-4 h-4"/></button>
-                <button onClick={()=>setDeleteId(s.id)} className="p-2 rounded-lg hover:bg-red-500/10 transition-colors" style={{color:"rgba(252,165,165,0.4)"}}><Trash2 className="w-4 h-4"/></button>
-              </div>
             </div>
           </motion.div>
         ))}
@@ -498,8 +565,16 @@ const ServicesPanel = ({ services, setServices }: {
           <Field label="Duration *" error={errors.duration}>
             <input className={iCls} style={iSty(errors.duration)} placeholder="60 min" value={form.duration} onChange={e=>setForm(p=>({...p,duration:e.target.value}))}/>
           </Field>
-          <Field label="Image URL">
-            <input className={iCls} style={iSty()} placeholder="https://…" value={form.image} onChange={e=>setForm(p=>({...p,image:e.target.value}))}/>
+          <Field label="Image" error={errors.image}>
+            <div className="flex gap-2 items-center">
+              <input type="file" accept="image/*" onChange={e=>setImgFile(e.target.files?.[0]||null)}
+                className="hidden" id="service-img-upload"/>
+              <label htmlFor="service-img-upload" className="flex items-center gap-2 cursor-pointer whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold" style={{border:`1px solid ${G}0.2)`,color:`${C}0.75)`}}>
+                <Upload className="w-4 h-4" /> Upload
+              </label>
+              <input className={iCls} style={iSty(errors.image)} placeholder="Or paste image URL" value={form.image} onChange={e=>setForm(p=>({...p,image:e.target.value}))}/>
+            </div>
+            {imgFile && <span className="text-xs text-soft-gold mt-1 pl-1">Selected: {imgFile.name}</span>}
           </Field>
           <div className="col-span-2"><Field label="Description *" error={errors.description}>
             <textarea rows={3} className={`${iCls} resize-none`} style={iSty(errors.description)} placeholder="Describe the service…" value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))}/>
@@ -512,12 +587,15 @@ const ServicesPanel = ({ services, setServices }: {
           </div>
         </div>
         <div className="flex gap-3 mt-5">
-          <GoldBtn onClick={save} cls="flex-1 py-3"><Save className="w-4 h-4"/>{editItem?"Save Changes":"Add Service"}</GoldBtn>
-          <button onClick={()=>setModalOpen(false)} className="px-5 py-3 rounded-xl text-sm font-semibold" style={{border:`1px solid ${G}0.2)`,color:`${C}0.45)`}}>Cancel</button>
+          <GoldBtn onClick={save} cls="flex-1 py-3" disabled={uploading}>
+            {uploading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+            {uploading ? "Saving..." : editItem ? "Save Changes" : "Add Service"}
+          </GoldBtn>
+          <button onClick={()=>setModalOpen(false)} disabled={uploading} className="px-5 py-3 rounded-xl text-sm font-semibold" style={{border:`1px solid ${G}0.2)`,color:`${C}0.45)`}}>Cancel</button>
         </div>
       </Modal>
       <ConfirmDelete open={!!deleteId} onClose={()=>setDeleteId(null)} label="Service"
-        onConfirm={()=>{setServices(p=>p.filter(s=>s.id!==deleteId));setDeleteId(null);}}/>
+        onConfirm={()=>deleteId&&deleteService(deleteId)}/>
     </div>
   );
 };
@@ -532,23 +610,66 @@ const GalleryPanel = ({ gallery, setGallery }: {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem,  setEditItem]  = useState<GalleryItem|null>(null);
   const [deleteId,  setDeleteId]  = useState<string|null>(null);
+  const [imgFile,   setImgFile]   = useState<File|null>(null);
+  const [uploading, setUploading] = useState(false);
   const empty: GalleryItem = { id:"", url:"", alt:"", category:"Hair", featured:false };
   const [form, setForm]     = useState<GalleryItem>(empty);
   const [errors, setErrors] = useState<Partial<GalleryItem>>({});
 
-  const openAdd  = () => { setForm(empty); setEditItem(null); setErrors({}); setModalOpen(true); };
-  const openEdit = (g:GalleryItem) => { setForm({...g}); setEditItem(g); setErrors({}); setModalOpen(true); };
+  const openAdd  = () => { setForm(empty); setEditItem(null); setImgFile(null); setErrors({}); setModalOpen(true); };
+  const openEdit = (g:GalleryItem) => { setForm({...g}); setEditItem(g); setImgFile(null); setErrors({}); setModalOpen(true); };
   const validate = () => {
     const e: Partial<GalleryItem> = {};
     if (!form.url.trim()) e.url="URL required";
     if (!form.alt.trim()) e.alt="Caption required";
     setErrors(e); return Object.keys(e).length===0;
   };
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
-    if (editItem) setGallery(p=>p.map(g=>g.id===editItem.id?form:g));
-    else setGallery(p=>[...p,{...form,id:`GL-${String(p.length+1).padStart(3,"0")}`}]);
+    setUploading(true);
+    let imageUrl = form.url;
+    
+    if (imgFile) {
+      const ext = imgFile.name.split('.').pop();
+      const fname = `${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('gallery-images').upload(fname, imgFile);
+      if (!upErr) {
+        const { data: pubData } = supabase.storage.from('gallery-images').getPublicUrl(fname);
+        imageUrl = pubData.publicUrl;
+      }
+    }
+
+    const payload = {
+      title: form.alt,
+      category: form.category,
+      image_url: imageUrl,
+      is_featured: form.featured,
+      display_order: gallery.length
+    };
+
+    if (editItem) {
+      const { error } = await supabase.from('gallery_items').update({
+        title: form.alt, category: form.category, image_url: imageUrl, is_featured: form.featured
+      }).eq('id', editItem.id);
+      if (!error) setGallery(p=>p.map(x=>x.id===editItem.id?{...form, url:imageUrl}:x));
+    } else {
+      const { data, error } = await supabase.from('gallery_items').insert([payload]).select().single();
+      if (!error && data) setGallery(p=>[...p, mapDbGallery(data)]);
+    }
+    setUploading(false);
     setModalOpen(false);
+  };
+  
+  const toggleFeatured = async (id:string, current:boolean) => {
+    setGallery(p=>p.map(x=>x.id===id?{...x,featured:!current}:x));
+    const { error } = await supabase.from('gallery_items').update({ is_featured: !current }).eq('id', id);
+    if (error) setGallery(p=>p.map(x=>x.id===id?{...x,featured:current}:x));
+  };
+  
+  const deleteGalleryItem = async (id:string) => {
+    const { error } = await supabase.from('gallery_items').delete().eq('id', id);
+    if (!error) setGallery(p=>p.filter(x=>x.id!==id));
+    setDeleteId(null);
   };
 
   return (
@@ -647,13 +768,53 @@ const ContentPanel = ({ content, setContent, testimonials, setTestimonials }: {
     setContent(p=>p.map(c=>c.id===u.id?u:c));
   };
 
+  const saveSection = async () => {
+    setSaved(true);
+    if (active.id === "hero") {
+      await supabase.from("hero_sections").update({
+        title: active.title,
+        subtitle: active.subtitle,
+        description: active.body
+      }).neq("id", "00000000-0000-0000-0000-000000000000"); // update first row
+    } else if (active.id === "about") {
+      await supabase.from("about_content").update({
+        owner_name: active.title,
+        owner_title: active.subtitle,
+        owner_bio: active.body
+      }).neq("id", "00000000-0000-0000-0000-000000000000");
+    }
+    setTimeout(()=>setSaved(false),2000);
+  };
+
   const openAddT  = () => { setTForm(emptyT); setEditT(null); setTOpen(true); };
   const openEditT = (t:Testimonial) => { setTForm({...t}); setEditT(t); setTOpen(true); };
-  const saveT = () => {
+  
+  const saveT = async () => {
     if (!tForm.name.trim()||!tForm.text.trim()) return;
-    if (editT) setTestimonials(p=>p.map(t=>t.id===editT.id?tForm:t));
-    else setTestimonials(p=>[...p,{...tForm,id:`TM-${String(p.length+1).padStart(3,"0")}`}]);
+    
+    const payload = {
+      name: tForm.name,
+      rating: tForm.rating,
+      review_text: tForm.text,
+      service: tForm.service,
+      source: "admin",
+      status: "approved"
+    };
+
+    if (editT) {
+      const { error } = await supabase.from("reviews").update(payload).eq("id", editT.id);
+      if (!error) setTestimonials(p=>p.map(t=>t.id===editT.id?tForm:t));
+    } else {
+      const { data, error } = await supabase.from("reviews").insert([payload]).select().single();
+      if (!error && data) setTestimonials(p=>[mapDbReview(data), ...p]);
+    }
     setTOpen(false);
+  };
+  
+  const deleteT = async (id: string) => {
+    const { error } = await supabase.from("reviews").delete().eq("id", id);
+    if (!error) setTestimonials(p=>p.filter(t=>t.id!==id));
+    setTDelId(null);
   };
 
   return (
@@ -686,9 +847,9 @@ const ContentPanel = ({ content, setContent, testimonials, setTestimonials }: {
           <Field label="Body Text">
             <textarea rows={4} className={`${iCls} resize-none`} style={iSty()} value={active.body} onChange={e=>updateField("body",e.target.value)}/>
           </Field>
-          <button
-            onClick={()=>{setSaved(true);setTimeout(()=>setSaved(false),2000);}}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95"
+          <button disabled={active.id==="services"}
+            onClick={saveSection}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             style={saved
               ?{background:"rgba(34,197,94,0.15)",color:"rgba(134,239,172,0.9)",border:"1px solid rgba(34,197,94,0.3)"}
               :{background:"linear-gradient(135deg,#C9A84C,#E8D5A3 50%,#C9A84C)",backgroundSize:"200% auto",color:"#080604"}}>
@@ -753,8 +914,8 @@ const ContentPanel = ({ content, setContent, testimonials, setTestimonials }: {
           <button onClick={()=>setTOpen(false)} className="px-5 py-3 rounded-xl text-sm font-semibold" style={{border:`1px solid ${G}0.2)`,color:`${C}0.45)`}}>Cancel</button>
         </div>
       </Modal>
-      <ConfirmDelete open={!!tDelId} onClose={()=>setTDelId(null)} label="Review"
-        onConfirm={()=>{setTestimonials(p=>p.filter(t=>t.id!==tDelId));setTDelId(null);}}/>
+      <ConfirmDelete open={!!tDelId} onClose={()=>setTDelId(null)} label="Testimonial"
+        onConfirm={()=>tDelId&&deleteT(tDelId)}/>
     </div>
   );
 };
@@ -815,7 +976,27 @@ const SettingsPanel = ({ settings, setSettings }: {
         <SF label="Happy Clients"    field="happyClients"  ph="5000+"/>
       </Sec>
       <div className="flex gap-3 pb-4">
-        <button onClick={()=>{setSettings(loc);setSaved(true);setTimeout(()=>setSaved(false),2000);}}
+        <button onClick={async ()=>{
+          setSaved(true);
+          await supabase.from("site_settings").update({
+            salon_name: loc.name,
+            tagline: loc.tagline,
+            phone: loc.phone,
+            whatsapp: loc.whatsapp,
+            email: loc.email,
+            address: loc.address,
+            city: loc.location,
+            opening_hours: loc.hours,
+            instagram_url: loc.instagram,
+            facebook_url: loc.facebook,
+            google_rating: loc.googleRating,
+            total_reviews: loc.totalReviews,
+            years_exp: loc.yearsExp,
+            happy_clients: loc.happyClients
+          }).neq("id", "00000000-0000-0000-0000-000000000000");
+          setSettings(loc);
+          setTimeout(()=>setSaved(false),2000);
+        }}
           className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all hover:-translate-y-0.5 active:scale-95"
           style={saved
             ?{background:"rgba(34,197,94,0.15)",color:"rgba(134,239,172,0.9)",border:"1px solid rgba(34,197,94,0.3)"}
@@ -839,12 +1020,71 @@ const AdminPanel = () => {
   const [tab,          setTab]          = useState("overview");
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [notifOpen,    setNotifOpen]    = useState(false);
-  const [bookings,     setBookings]     = useState<Booking[]>(SEED_BOOKINGS);
-  const [services,     setServices]     = useState<Service[]>(SEED_SERVICES);
-  const [gallery,      setGallery]      = useState<GalleryItem[]>(SEED_GALLERY);
-  const [content,      setContent]      = useState<ContentSection[]>(SEED_CONTENT);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(SEED_TESTIMONIALS);
-  const [settings,     setSettings]     = useState<SalonSettings>(SEED_SETTINGS);
+  const [bookings,     setBookings]     = useState<Booking[]>([]);
+  const [services,     setServices]     = useState<Service[]>([]);
+  const [gallery,      setGallery]      = useState<GalleryItem[]>([]);
+  const [content,      setContent]      = useState<ContentSection[]>([
+    {id:"hero",section:"Hero",title:"",subtitle:"",body:""},
+    {id:"about",section:"About",title:"",subtitle:"",body:""},
+    {id:"services",section:"Services",title:"PREMIUM Services",subtitle:"Our Expert Offerings",body:""},
+  ]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [settings,     setSettings]     = useState<SalonSettings>(EMPTY_SETTINGS);
+  const [heroId,       setHeroId]       = useState("");
+  const [aboutId,      setAboutId]      = useState("");
+  const [settingsId,   setSettingsId]   = useState("");
+  const { logout } = useAdmin();
+
+  /* ─── Load all data from Supabase ───────────────────────────────── */
+  useEffect(() => {
+    const load = async () => {
+      const [svcR, galR, bkgR, revR, heroR, aboutR, stR] = await Promise.all([
+        supabase.from("services").select("*").order("created_at"),
+        supabase.from("gallery_items").select("*").order("display_order"),
+        supabase.from("bookings").select("*, services(name,category,price_start)").order("created_at",{ascending:false}),
+        supabase.from("reviews").select("*").eq("status","approved").order("created_at",{ascending:false}),
+        supabase.from("hero_sections").select("*").limit(1).maybeSingle(),
+        supabase.from("about_content").select("*").limit(1).maybeSingle(),
+        supabase.from("site_settings").select("*").limit(1).maybeSingle(),
+      ]);
+      if (svcR.data)  setServices(svcR.data.map(mapDbService));
+      if (galR.data)  setGallery(galR.data.map(mapDbGallery));
+      if (bkgR.data)  setBookings(bkgR.data.map(mapDbBooking));
+      if (revR.data)  setTestimonials(revR.data.map(mapDbReview));
+      if (heroR.data) {
+        setHeroId(heroR.data.id);
+        setContent([
+          {id:"hero",    section:"Hero",     title:heroR.data.title||"",          subtitle:heroR.data.subtitle||"",         body:heroR.data.description||""},
+          {id:"about",   section:"About",    title:aboutR.data?.owner_name||"",   subtitle:aboutR.data?.owner_title||"",   body:aboutR.data?.owner_bio||""},
+          {id:"services",section:"Services", title:"PREMIUM Services",             subtitle:"Our Expert Offerings",          body:""},
+        ]);
+      }
+      if (aboutR.data) setAboutId(aboutR.data.id);
+      if (stR.data) {
+        setSettingsId(stR.data.id);
+        setSettings({
+          name:stR.data.salon_name||"", tagline:stR.data.tagline||"",
+          phone:stR.data.phone||"", whatsapp:stR.data.whatsapp||"",
+          email:stR.data.email||"", address:stR.data.address||"",
+          location:stR.data.city||"", hours:stR.data.opening_hours||"",
+          owner:aboutR.data?.owner_name||"", ownerTitle:aboutR.data?.owner_title||"",
+          ownerBio:aboutR.data?.owner_bio||"",
+          instagram:stR.data.instagram_url||"", facebook:stR.data.facebook_url||"",
+          googleRating:stR.data.google_rating||"4.3", totalReviews:stR.data.total_reviews||"0",
+          yearsExp:stR.data.years_exp||"15+", happyClients:stR.data.happy_clients||"5000+",
+        });
+      }
+    };
+    load();
+    /* Realtime: refresh bookings on any change */
+    const ch = supabase.channel("admin_bookings_rt")
+      .on("postgres_changes",{event:"*",schema:"public",table:"bookings"},() => {
+        supabase.from("bookings").select("*, services(name,category,price_start)").order("created_at",{ascending:false})
+          .then(({data}) => { if (data) setBookings(data.map(mapDbBooking)); });
+      }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
 
   const pending = bookings.filter(b=>b.status==="pending").length;
 

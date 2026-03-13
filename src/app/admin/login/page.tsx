@@ -6,6 +6,7 @@ import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const AdminLoginPage = () => {
   const router = useRouter();
@@ -17,20 +18,23 @@ const AdminLoginPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError("");
-    
-    // Simulate Supabase Auth
-    setTimeout(() => {
-      if (formData.email === "admin@habibssalon.com" && formData.password === "admin123") {
-        router.push("/admin/dashboard");
-      } else {
-        setError("Invalid email or password. Please try again.");
-        setIsSubmitting(false);
-      }
-    }, 1500);
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: formData.email,
+      password: formData.password,
+    });
+
+    if (authError) {
+      setError(authError.message || "Invalid email or password. Please try again.");
+      setIsSubmitting(false);
+    } else {
+      router.push("/admin/dashboard");
+      router.refresh();
+    }
   };
 
   return (
@@ -88,7 +92,7 @@ const AdminLoginPage = () => {
                 <input
                   type="email"
                   required
-                  placeholder="admin@habibssalon.com"
+                  placeholder="admin@example.com"
                   className="w-full bg-white/5 border border-soft-gold/20 p-4 pl-14 rounded-sm focus:outline-none focus:border-soft-gold transition-all text-sm italic font-sans text-champagne"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -122,7 +126,7 @@ const AdminLoginPage = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full flex items-center justify-center space-x-4 bg-soft-gold text-luxury-black px-8 py-5 rounded-sm hover:bg-champagne transition-all duration-500 shadow-2xl group font-bold uppercase tracking-[0.2em] text-sm mt-8"
+            className="w-full flex items-center justify-center space-x-4 bg-soft-gold text-luxury-black px-8 py-5 rounded-sm hover:bg-champagne transition-all duration-500 shadow-2xl group font-bold uppercase tracking-[0.2em] text-sm mt-8 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span>{isSubmitting ? "Verifying..." : "Login Securely"}</span>
           </button>

@@ -161,8 +161,17 @@ const BookingInner = () => {
               </div>
               <SectionDivider />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-                role="radiogroup" aria-label="Select a service">
+              {/*
+                MOBILE: horizontal scroll snap carousel
+                DESKTOP (sm+): 2-column grid
+              */}
+              <div
+                className="sm:hidden flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory"
+                role="radiogroup"
+                aria-label="Select a service"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                <style>{`.no-scrollbar::-webkit-scrollbar{display:none}`}</style>
                 {SERVICES.map((s) => {
                   const Icon = getCategoryIcon(s.category);
                   const active = form.serviceId === s.id;
@@ -170,7 +179,7 @@ const BookingInner = () => {
                     <button key={s.id}
                       onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
                       role="radio" aria-checked={active}
-                      className="flex items-start gap-4 p-4 rounded-xl text-left transition-all duration-200
+                      className="flex-shrink-0 w-[72vw] max-w-[260px] flex flex-col gap-3 p-4 rounded-xl text-left snap-start transition-all duration-200
                                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]"
                       style={{
                         background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
@@ -184,15 +193,65 @@ const BookingInner = () => {
                       <div className="min-w-0">
                         <p className="font-serif font-bold text-sm leading-tight mb-0.5"
                           style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.6)" }}>{s.title}</p>
-                        <p className="text-[10px] font-sans leading-relaxed line-clamp-2"
+                        <p className="text-[10px] font-sans leading-relaxed line-clamp-3"
                           style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
-                        <p className="text-[10px] font-sans font-semibold mt-1"
+                        <p className="text-[10px] font-sans font-semibold mt-1.5"
                           style={{ color: "rgba(201,168,76,0.55)" }}>{s.price}</p>
                       </div>
                     </button>
                   );
                 })}
               </div>
+
+              {/* Desktop 2-col grid */}
+              <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                role="radiogroup" aria-label="Select a service">
+                {SERVICES.map((s, idx) => {
+                  const Icon = getCategoryIcon(s.category);
+                  const active = form.serviceId === s.id;
+                  const isLastOdd = idx === SERVICES.length - 1 && SERVICES.length % 3 === 1;
+                  return (
+                    <button key={s.id}
+                      onClick={() => { setForm((p) => ({ ...p, serviceId: s.id })); setStep(2); }}
+                      role="radio" aria-checked={active}
+                      className={`flex flex-col gap-4 p-5 rounded-2xl text-left transition-all duration-300
+                                 hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(201,168,76,0.1)]
+                                 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A84C]
+                                 ${isLastOdd ? "sm:col-span-2 lg:col-span-3 lg:max-w-sm lg:mx-auto lg:w-full" : ""}`}
+                      style={{
+                        background: active ? "rgba(201,168,76,0.1)" : "rgba(255,255,255,0.03)",
+                        border: `1px solid ${active ? "rgba(201,168,76,0.35)" : "rgba(201,168,76,0.1)"}`,
+                      }}
+                    >
+                      {/* Icon row */}
+                      <div className="flex items-center justify-between">
+                        <div className="w-12 h-12 rounded-full flex items-center justify-center"
+                          style={{ background: active ? "rgba(201,168,76,0.18)" : "rgba(201,168,76,0.07)" }}>
+                          <Icon className="w-5 h-5" style={{ color: active ? "#C9A84C" : "rgba(201,168,76,0.45)" }} aria-hidden="true" />
+                        </div>
+                        {active && (
+                          <div className="w-2 h-2 rounded-full" style={{ background: "#C9A84C" }} aria-hidden="true" />
+                        )}
+                      </div>
+                      {/* Text */}
+                      <div className="min-w-0">
+                        <p className="font-serif font-bold text-base leading-tight mb-1.5"
+                          style={{ color: active ? "#EDE0C4" : "rgba(237,224,196,0.65)" }}>{s.title}</p>
+                        <p className="text-[11px] font-sans leading-relaxed line-clamp-2 mb-3"
+                          style={{ color: "rgba(237,224,196,0.3)" }}>{s.description}</p>
+                        <p className="text-xs font-sans font-semibold tracking-wide"
+                          style={{ color: active ? "rgba(201,168,76,0.8)" : "rgba(201,168,76,0.5)" }}>{s.price}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Scroll hint for mobile */}
+              <p className="sm:hidden text-center text-[9px] uppercase tracking-widest mt-3 font-sans"
+                style={{ color: "rgba(201,168,76,0.3)" }}>
+                Swipe to explore services →
+              </p>
             </motion.div>
           )}
 
@@ -392,50 +451,73 @@ const BookingContent = () => {
   return (
     <div className="bg-[#080604] min-h-screen">
 
-      {/* header */}
-      <div className="pt-28 md:pt-36 pb-12 px-5 sm:px-8 md:px-12 lg:px-16">
-        <motion.div
-          initial={{ opacity: 0, y: prefersReduced ? 0 : 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: EXPO }}
-          className="max-w-2xl"
-        >
-          <p className="text-[10px] uppercase tracking-[0.4em] font-sans font-medium mb-4"
-            style={{ color: "rgba(201,168,76,0.65)" }}>
-            Reservation
-          </p>
-          <h1
-            className="font-serif text-[#EDE0C4] leading-[0.93] tracking-tight mb-5"
-            style={{ fontSize: "clamp(2.4rem, 7vw, 5.5rem)" }}
-          >
-            BOOK AN
-            <br />
-            <span className="italic font-light" style={{
-              background: "linear-gradient(135deg, #F5E6B0 0%, #C9A84C 45%, #A08C5B 100%)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-            }}>Appointment</span>
-          </h1>
-          <div className="flex items-center gap-3 mb-5" aria-hidden="true">
-            <div className="w-10 h-px bg-gradient-to-r from-transparent to-[#C9A84C]/40" />
-            <div className="w-1.5 h-1.5 rotate-45 border border-[#C9A84C]/50" />
-            <div className="w-10 h-px bg-gradient-to-l from-transparent to-[#C9A84C]/40" />
-          </div>
-          <p className="text-[#EDE0C4]/45 text-sm md:text-base font-sans leading-relaxed max-w-md">
-            Reserve your luxury beauty session in just a few steps. Select your service,
-            choose a time, and we'll take care of the rest.
-          </p>
-        </motion.div>
-      </div>
+      {/*
+        Two-column layout on desktop:
+        Left col  → hero headline (sticky feel, ~40% width)
+        Right col → booking form (~60% width)
+        Mobile    → stacked, header above form
+      */}
+      <div className="lg:flex lg:min-h-screen lg:items-start">
 
-      {/* form */}
-      <div className="px-5 sm:px-8 md:px-12 lg:px-16 pb-24 max-w-4xl">
-        <motion.div
-          initial={{ opacity: 0, y: prefersReduced ? 0 : 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.15, ease: EXPO }}
-        >
-          <BookingInner />
-        </motion.div>
+        {/* ── Left / Header column ── */}
+        <div className="lg:sticky lg:top-0 lg:h-screen lg:flex lg:items-center
+                        pt-28 md:pt-36 lg:pt-0
+                        px-5 sm:px-8 md:px-12 lg:px-16
+                        pb-10 lg:pb-0
+                        lg:w-[42%] lg:shrink-0">
+          <motion.div
+            initial={{ opacity: 0, y: prefersReduced ? 0 : 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EXPO }}
+            className="max-w-xl lg:max-w-none w-full"
+          >
+            <p className="text-[10px] uppercase tracking-[0.4em] font-sans font-medium mb-4"
+              style={{ color: "rgba(201,168,76,0.65)" }}>
+              Reservation
+            </p>
+            <h1
+              className="font-serif text-[#EDE0C4] leading-[0.93] tracking-tight mb-5"
+              style={{ fontSize: "clamp(2.4rem, 6vw, 5.5rem)" }}
+            >
+              BOOK AN
+              <br />
+              <span className="italic font-light" style={{
+                background: "linear-gradient(135deg, #F5E6B0 0%, #C9A84C 45%, #A08C5B 100%)",
+                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+              }}>Appointment</span>
+            </h1>
+            <div className="flex items-center gap-3 mb-5" aria-hidden="true">
+              <div className="w-10 h-px bg-gradient-to-r from-transparent to-[#C9A84C]/40" />
+              <div className="w-1.5 h-1.5 rotate-45 border border-[#C9A84C]/50" />
+              <div className="w-10 h-px bg-gradient-to-l from-transparent to-[#C9A84C]/40" />
+            </div>
+            <p className="text-[#EDE0C4]/45 text-sm md:text-base font-sans leading-relaxed max-w-md">
+              Reserve your luxury beauty session in just a few steps. Select your service,
+              choose a time, and we'll take care of the rest.
+            </p>
+
+            {/* Decorative element — only visible on desktop */}
+            <div className="hidden lg:block mt-12">
+              <div className="w-px h-24 ml-1"
+                style={{ background: "linear-gradient(to bottom, rgba(201,168,76,0.35), transparent)" }}
+                aria-hidden="true" />
+            </div>
+          </motion.div>
+        </div>
+
+        {/* ── Right / Form column ── */}
+        <div className="flex-1 px-5 sm:px-8 md:px-12 lg:px-10 xl:px-16
+                        pb-24 lg:py-28
+                        lg:flex lg:items-center">
+          <motion.div
+            initial={{ opacity: 0, y: prefersReduced ? 0 : 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: EXPO }}
+            className="w-full max-w-2xl lg:max-w-none"
+          >
+            <BookingInner />
+          </motion.div>
+        </div>
       </div>
 
       <div className="h-px w-full"
