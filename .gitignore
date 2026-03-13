@@ -1,72 +1,36 @@
-# =========================
-# Dependencies
-# =========================
-node_modules/
+# dependencies
+/node_modules
 
-# =========================
-# Next.js build output
-# =========================
-.next/
-out/
-dist/
-build/
+# next.js
+/.next/
+/out/
+/build/
 
-# =========================
-# Logs
-# =========================
+# logs
 *.log
 build.log
 build-error.txt
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
-# =========================
-# Environment variables
-# =========================
+# environment files
 .env
 .env.local
 .env.development
 .env.production
-.env.test
 
-# =========================
-# TypeScript
-# =========================
+# typescript
 *.tsbuildinfo
 
-# =========================
-# System files
-# =========================
+# system
 .DS_Store
 Thumbs.db
 
-# =========================
-# Editor / IDE
-# =========================
-.vscode/*
-!.vscode/settings.json
-!.vscode/extensions.json
-!.vscode/launch.json
+# editor
+.vscode/
 
-.idea/
+# kiro specs
+.kiro/
 
-# =========================
-# Package manager
-# =========================
-.pnpm-store/
-.npm/
-.yarn/
-
-# =========================
-# Misc
-# =========================
-coverage/
+# cache
 .cache/
 .tmp/
-
-# =========================
-# Local folders
-# =========================
-.kira/
+coverage/
